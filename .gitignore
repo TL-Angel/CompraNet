@@ -3,3 +3,16 @@ __pycache__/
 notebooks/
 config/config.json
 Pipfile.lock
+*.py[cod]
+*$py.class/
+data/
+auth/
+notebooks/
+logs/
+.ipynb_checkpoints
+Pipfile.lock
+*.ipynb
+*.xlsx
+api/logs.txt
+*/logs.txt
+api/logs.txt
