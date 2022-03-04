@@ -1,5 +1,7 @@
 import sys
-
+from src.utilsv2 import *
+from connections.datalakeconn import *
+from scraper.aux import *
 sys.path.append("../")
 from requests_html import HTMLSession
 import re
@@ -18,13 +20,16 @@ from bson.binary import Binary
 import requests
 import pymongo
 from pymongo import MongoClient
-from src.utilsv2 import *
 from copy import deepcopy
 from pymongo import ReplaceOne
-from connections.datalakeconn import *
-from aux import *
+#############################################
+# CONGIF ZONE
+#############################################
+LOG_PENDIENTES = "../data/logs/logs_actas_pendientes.txt"
 
-# Data lake
+#############################################
+# Clases para el proceso
+#############################################
 def upload_file_to_dl(blobname, folder, file_name, year, month):
     """Sube un archivo a CompreNet al DataLake."""
     BUCKET = "uniclick-dl-robina-compranet"
@@ -170,9 +175,7 @@ class DownloadExpedientes(object):
         """
         self.year = year
         self.month = month
-        ########################################
         ## FILTRAR POR AÑO Y MES PARA LUEGO DESCARGAR LAS ACTAS
-        ########################################
         salida = []
         try:
             if (len(self.child.data_frame_new_licitaciones_no_lite) == 0) & (
@@ -212,9 +215,6 @@ class DownloadExpedientes(object):
             ].values:
                 try:
                     salida.append(self.get_file(id_opt, id_exp, ""))
-                    # r_t = random.choice(range(-int(sleep_time*0.7), int(sleep_time*0.7)))
-                    # t = int(sleep_time) + r_t
-                    # time.sleep(t)
                 except Exception as e:
                     print("Error per request: {}".format(e))
                     result_log = "Error al solicitar descarga de acta: {}".format(e)
@@ -230,13 +230,12 @@ class DownloadExpedientes(object):
         if len(links) == 3:
             print("contador: {0}, item: {1}".format(contador, links[1]))
             downloadFile = smartproxy(url_base + links[1] , session)
-            #downloadFile = session.get(url_base + links[1])
             if downloadFile.status_code == 200:
                 print(":::  obteniendo Acta  .......................................")
                 ext_split = downloadFile.headers["Content-Disposition"].split(".")
                 ext = ext_split[len(ext_split) - 1]
                 file_name = fileName + "_" + str(contador) + "." + ext
-                try:
+                try:   
                     self.write_file(downloadFile, fileName, contador, ext)
                     print("Acta descargada")
                     result_log = "Acta descargada"
@@ -250,6 +249,7 @@ class DownloadExpedientes(object):
                     self.child.reporte_actas["actas_no_descargadas"].append(file_name)
 
                 try:
+                    ## CREAR UN NUEVO LOG QUE TENGA LA LISTA DE ARCHIVOS QUE NO FUERON MANDADOS AL DL
                     response = upload_file_to_dl(
                         self.blob_name, self.tmp_data, file_name, self.year, self.month
                     )
@@ -261,30 +261,33 @@ class DownloadExpedientes(object):
                     print("Acta no subida al data lake")
                     result_log = "Acta no subida al data lake, error: "
                     self.write_logfile(file_name, result_log + e)
+                    self.write_logfile(file_name, result_log + e, LOG_PENDIENTES)
                     print(e)
                     self.child.reporte_actas["actas_no_subidas_al_dl"].append(file_name)
-                # hacer un if si se manda al data lake:
-                enviado = self.send_file(fileName, str(contador), ext)
-                if enviado.status_code == 200:
-                    print("Acta procesada en literata: ok")
-                    result_log = "Acta Procesada en Literata: ok. Respuesta server literarta: {}".format(
-                        enviado.status_code
-                    )
-                    self.write_logfile(file_name, result_log)
-                    self.child.reporte_actas["actas_procesadas_literata"].append(
-                        file_name
-                    )
-                    return enviado
-                else:
-                    print("Status code: {}".format(enviado))
-                    result_log = "No se pudo insertar registro a la db. Respuesta server literarta: {}".format(
-                        enviado.status_code
-                    )
-                    self.write_logfile(file_name, result_log)
-                    self.child.reporte_actas["actas_no_procesadas_literata"].append(
-                        file_name
-                    )
-                    return None
+                #############################################################
+                # COMIENZA PROCESO PARA ENVIAR A LITERATA
+                #############################################################
+                # enviado = self.send_file(fileName, str(contador), ext)
+                # if enviado.status_code == 200:
+                #     print("Acta procesada en literata: ok")
+                #     result_log = "Acta Procesada en Literata: ok. Respuesta server literarta: {}".format(
+                #         enviado.status_code
+                #     )
+                #     self.write_logfile(file_name, result_log)
+                #     self.child.reporte_actas["actas_procesadas_literata"].append(
+                #         file_name
+                #     )
+                #     return enviado
+                # else:
+                #     print("Status code: {}".format(enviado))
+                #     result_log = "No se pudo insertar registro a la db. Respuesta server literarta: {}".format(
+                #         enviado.status_code
+                #     )
+                #     self.write_logfile(file_name, result_log)
+                #     self.child.reporte_actas["actas_no_procesadas_literata"].append(
+                #         file_name
+                #     )
+                #     return None
                 ###############################################################################
             else:
                 self.child.reporte_actas["actas_no_descargadas"].append(fileName)
@@ -325,14 +328,15 @@ class DownloadExpedientes(object):
         except Exception as e:
             print("Error - archivo no cargado a literata: {}".format(e))
 
-    def write_logfile(self, fileName, result_log):
+    def write_logfile(self, fileName, result_log, log_name="../data/logs/logs.txt"):
         """Método para escribir un acción al log file
 
         Args:
             fileName (str): Nombre del archivo o acción
             result_log (str): Descripción de la acción
         """
-        with open("../data/logs/logs.txt", "a") as file:
+
+        with open(log_name, "a") as file:
             file.write(
                 "\n{0},{1},{2}".format(
                     dt.now().strftime("%Y%m%d %H:%M:%S"), fileName, result_log
@@ -419,7 +423,7 @@ class DownloadExpedientes(object):
         """
         year_1 = str(int(current_year) - 1)
         year_2 = str(int(current_year) - 2)
-        years = [current_year, year_1, year_2]
+        years = [current_year]#, year_1, year_2]
         list_path = []
         for year in years:
             with HTMLSession() as session:

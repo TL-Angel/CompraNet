@@ -1,33 +1,13 @@
-from thinc.api import Adam
-from thinc.api import SGD
-import spacy
+
 import random
-from thinc.api import compounding
 from pathlib import Path
 import json
-from spacy.training import Example
 import re
 from unicodedata import normalize
 from pymongo import MongoClient
 import string
 import pandas as pd
 
-# from tqdm import tqdm
-def creating_new_model(arquitecture, idioma):
-    # modelop en blanco
-    nlp = spacy.blank(idioma)
-    # creamos un ner y se agrega al pipeline
-    ner = nlp.create_pipe(arquitecture)
-    nlp.add_pipe(arquitecture)
-    return nlp, ner
-
-
-###############################################
-def loading_model(model):
-    # modelop en blanco
-    nlp = spacy.load(model)
-    # creamos un ner y se agrega al pipeline
-    return nlp
 
 
 ###############################################
@@ -500,63 +480,6 @@ def cleaning_by_line_v3(file, formato=r"alfabetopuntos"):
     return file
 
 
-def training_ner(nlp, data_set, n_iter, size_batch=10, optimizador=False, test_size=50):
-    test_path = r"test_dataset_json/data29filesORG.jsonl"
-    data_test = import_data_set(test_path)
-    data_test = [clean_entities_v3(data) for data in data_test]
-    data_test = random.sample(data_test, test_size)
-    err_data = []
-    scores = []
-    if optimizador == False:
-        optimizador = Adam(
-            learn_rate=0.001,
-            beta1=0.9,
-            beta2=0.999,
-            eps=1e-08,
-            L2=1e-6,
-            grad_clip=1.0,
-            use_averages=True,
-            L2_is_weight_decay=True,
-        )
-
-    # -> Optimizer (new)
-    optimizer = nlp.begin_training(sgd=optimizador)
-    other_pipes = [pipe for pipe in nlp.pipe_names if pipe != "ner"]
-    ls_loss = []
-    with nlp.disable_pipes(*other_pipes):
-        for i in tqdm(range(n_iter), desc="Iteraciones"):
-            random.shuffle(
-                data_set
-            )  # aqui mezcla los datos de entreamiento de manera aletoria por cada iteracion
-            losses = {}  # creamos un diccionario para ir guardando los losses
-            for batch in tqdm(
-                spacy.util.minibatch(data_set, size=size_batch), desc="minibatch"
-            ):  # itera sobre cada minibatch
-                try:
-                    # en las siguientes lineas separamos en listas diferetens cuales son texto y cuales son annotaions de cada minibatch
-                    examples = []
-                    for text, annotations in batch:
-                        doc = nlp.make_doc(text)
-                        example = Example.from_dict(doc, annotations)
-                        examples.append(example)
-                    nlp.update([example], sgd=optimizer, losses=losses, drop=0.2)
-                    ls_loss.append(losses)
-                    scores.append(evaluar(data_test, nlp))
-
-                except Exception as e:
-                    print(e)
-                    err_data.append(batch)
-                    pass
-
-    return nlp, ls_loss, scores, err_data
-
-
-def ner_pipeline(idioma, labels_raw, data_set, n_iter, size_batch=10, test_size=50):
-    modelo = "ner"
-    nlp, ner = creating_new_model(modelo, idioma)
-    labels, ner = adding_labels(labels_raw, ner)
-    nlp, loss, scores, err_data = training_ner(nlp, data_set, n_iter, size_batch)
-    return nlp, loss, scores, err_data
 
 
 def get_list_pymes(num_pymes, robina_path=r"uri_robina.txt"):
@@ -702,31 +625,6 @@ def df_test_v2(
     return df
 
 
-def evaluar(data, nlp):
-    examples = []
-    err = []
-    evaluacion = []
-    for text, annots in data:
-        try:
-            doc = nlp.make_doc(text)
-            examples.append(Example.from_dict(doc, annots))
-        except:
-            err.append((text, annots))
-    # for exp in examples:
-    try:
-        # evaluacion.append(nlp.evaluate(examples))
-        evaluacion = nlp.evaluate(examples)
-    except:
-        err.append(examples)
-    return evaluacion
-
-
-#####################################################################
-# EXTRACCION NER
-#####################################################################
-
-NER_MODEL = spacy.load("ner_alfanumpuntos_100iter_20kitems")
-
 
 def filter_orgs(ent_lst):
     rgx_lst = [
@@ -766,18 +664,3 @@ def filter_orgs(ent_lst):
     return list(set(org_lst)), list(set(res))
 
 
-def extract_orgs(text, filter_=True, raw=False):
-    if raw:
-        doc = NER_MODEL(re.sub("\n", " ", limpieza_texto(text)))
-    else:
-        doc = NER_MODEL(text)
-    orgs = []
-
-    for ent in doc.ents:
-        if str(ent.label_) == "ORG":
-            text = ent.text.upper().strip()
-            orgs.append(text)
-    if filter_:
-        return filter_orgs(orgs)
-    else:
-        return orgs

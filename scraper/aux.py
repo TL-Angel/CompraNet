@@ -4,13 +4,11 @@ import os
 from pathlib import Path
 import uuid
 import sys
-from tools import *
+sys.path.append("..")
+from scraper.tools import *
 from src.utils import *
 from fake_useragent import UserAgent
-sys.path.append("..")
 from connections.datalakeconn import *
-
-# from api.tools import *
 from connections.mongoconn import MongoConn
 from pymongo import ReplaceOne
 from copy import deepcopy
@@ -532,8 +530,7 @@ def smartproxy(url: str, session2, country=None, sticky=True):
     if sticky:
         r = str(random.randint(1, 9999)).zfill(4)
     else:
-        r = str(random.randint(1, 9999)).zfill(4)
-        #r = "0000"
+        r = "0000"
     if country == "US":
         proxy = {
             "http": f"http://{user}:{psswd}@us.smartproxy.com:1{r}",
@@ -556,42 +553,9 @@ def smartproxy(url: str, session2, country=None, sticky=True):
         }
     return session2.get(
         url, 
-        #proxies={"http": proxy["http"], "https": proxy["https"]},
+        #proxies=proxy,
         headers = {'User-Agent': user_agent.random}
         )
-def smartproxy2( country=None, sticky=True):
-    """Devuelve los proxies seleccionados."""
-    user_agent = UserAgent()
-    headers = {'User-Agent': user_agent.random}
-    user = "robiproxies"
-    psswd = "Un1click"
-    if sticky:
-        r = str(random.randint(1, 9999)).zfill(4)
-    else:
-        r = str(random.randint(1, 9999)).zfill(4)
-        #r = "0000"
-    if country == "US":
-        proxy = {
-            "http": f"http://{user}:{psswd}@us.smartproxy.com:1{r}",
-            "https": f"http://{user}:{psswd}@us.smartproxy.com:1{r}",
-        }
-    elif country == "MX":
-        proxy = {
-            "http": f"http://{user}:{psswd}@mx.smartproxy.com:2{r}",
-            "https": f"http://{user}:{psswd}@mx.smartproxy.com:2{r}",
-        }
-    elif country == "GLOBAL":
-        proxy = {
-            "http": f"http://{user}:{psswd}@gate.smartproxy.com:1{r}",
-            "https": f"http://{user}:{psswd}@gate.smartproxy.com:1{r}",
-        }
-    elif country == None:
-        proxy = {
-            "http": f"http://{user}:{psswd}@gate.dc.smartproxy.com:2{r}",
-            "https": f"http://{user}:{psswd}@gate.dc.smartproxy.com:2{r}",
-        }
-    return proxy
-
 
 if __name__ == "__main__":
     upload_txt_to_dl("hola", "prueba")

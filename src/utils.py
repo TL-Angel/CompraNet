@@ -1,51 +1,13 @@
 import json
 import re
 import random
-import spacy
 from unicodedata import normalize
 from pymongo import MongoClient
-
-
-#####################################################################
-# CONEXION DB
-#####################################################################
-
-with open("../auth/uri_robina.txt") as f:
-    URI = f.read().strip()
-
-CONN = MongoClient(URI)
-PYME_COL = CONN["datalake"]["hoovers_in_denue"]
-
-
-def limit_gpu_use(verbose=True):
-    import tensorflow as tf
-
-    gpus = tf.config.experimental.list_physical_devices("GPU")
-    if gpus:
-        try:
-            # Restrict TensorFlow to only use the fourth GPU
-            tf.config.experimental.set_visible_devices(gpus[0], "GPU")
-            # Currently, memory growth needs to be the same across GPUs
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.experimental.list_logical_devices("GPU")
-            if verbose:
-                print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-            return True
-        except RuntimeError as e:
-            # Memory growth must be set before GPUs have been initialized
-            if verbose:
-                print(e)
-            return False
-    else:
-        if verbose:
-            print("No GPUs")
-        return True
-
 
 #####################################################################
 # LIMPIEZA DE TEXTO
 #####################################################################
+
 
 
 def fix_lines_str(str_):
@@ -286,68 +248,6 @@ def print_ents(data):
         org = cont[ent[0] : ent[1]]
         print(org)
 
-
-#####################################################################
-# ENTRENAMIENTO
-#####################################################################
-
-
-def train_spacy(data, iterations, return_history=False, from_scratch=True):
-    TRAIN_DATA = data
-    if from_scratch:
-        nlp = spacy.blank("es")  # create blank Language class
-        if "ner" not in nlp.pipe_names:
-            ner = nlp.create_pipe("ner")
-            nlp.add_pipe(ner, last=True)
-    else:
-        nlp = spacy.load("es_core_news_lg")
-        # create the built-in pipeline components and add them to the pipeline
-        # nlp.create_pipe works for built-ins that are registered with spaCy
-        ner = nlp.get_pipe("ner")
-
-    # add labels
-    for _, annotations in TRAIN_DATA:
-        for ent in annotations.get("entities"):
-            ner.add_label(ent[2])
-
-    # get names of other pipes to disable them during training
-    other_pipes = [pipe for pipe in nlp.pipe_names if pipe != "ner"]
-    history = []
-
-    with nlp.disable_pipes(*other_pipes):  # only train NER
-
-        optimizer = nlp.begin_training()
-
-        for itn in range(iterations):
-            print("Starting iteration " + str(itn))
-            random.shuffle(TRAIN_DATA)
-            losses = {}
-            for text, annotations in TRAIN_DATA:
-                nlp.update(
-                    [text],  # batch of texts
-                    [annotations],  # batch of annotations
-                    drop=0.2,  # dropout - make it harder to memorise data
-                    sgd=optimizer,  # callable to update weights
-                    losses=losses,
-                )
-            history.append(losses)
-            print(losses)
-    if return_history:
-        return nlp, history
-    else:
-        return nlp
-
-
-#####################################################################
-# EXTRACCION NER
-#####################################################################
-
-# NER_MODEL = spacy.load('../data/models/compranet_org_10k_1')
-NER_MODEL = spacy.load(
-    "../data/models/ner_alfanumpuntos_100iter_20000items_batch30_tsize50"
-)
-
-
 def filter_orgs(ent_lst):
     rgx_lst = [
         " S[ \.]*A[ \.]* DE",
@@ -383,24 +283,3 @@ def filter_orgs(ent_lst):
             org_lst.append(ent)
 
     return list(set(org_lst))
-
-
-def extract_ents(text, filter_=True, raw=True):
-    if raw:
-        doc = NER_MODEL(cleaning_by_line_v3(text, formato="licitantes"))
-    else:
-        doc = NER_MODEL(text)
-
-    results = []
-
-    for ent in doc.ents:
-        if str(ent.label_) == "ORG":
-            text = ent.text.upper().strip()
-            results.append({"text": text, "label": ent.label_})
-
-    if filter_:
-        filtered = filter_orgs([x["text"] for x in results])
-        # print(filtered)
-        results = [x for x in results if x["text"] in filtered]
-
-    return [dict(t) for t in {tuple(d.items()) for d in results}]

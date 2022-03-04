@@ -5,8 +5,6 @@ name = "pypi"
 
 [packages]
 pymongo = "*"
-fastapi = "*"
-uvicorn = "*"
 unicodedata2 = "*"
 python-multipart = "*"
 bs4 = "*"
@@ -17,11 +15,9 @@ google-cloud-storage = "*"
 pipfile = "*"
 numpy = "*"
 requests-html = "*"
-tqdm = "*"
 pandas = "*"
 pymssql = "*"
 openpyxl = "*"
-spacy = "*"
 fake-useragent = "*"
 
 [dev-packages]

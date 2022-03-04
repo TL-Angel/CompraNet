@@ -1,7 +1,11 @@
+
 from cmath import e
 import sys
-
 sys.path.append("../")
+from connections.datalakeconn import *
+from scraper.tools import *
+from src.utilsv2 import *
+from scraper.aux import write_logfile, write_report_actas
 from requests_html import HTMLSession
 import re
 from datetime import date, timedelta, datetime as dt
@@ -10,22 +14,8 @@ from io import BytesIO
 import os
 import pandas as pd
 import numpy as np
-import json
-import random
 import time
-import bson
-import base64
-from bson.binary import Binary
-import requests
-import pymongo
-from pymongo import MongoClient
-from src.utilsv2 import *
 from copy import deepcopy
-from pymongo import ReplaceOne
-from connections.datalakeconn import *
-from tools import *
-from aux import write_logfile, write_report_actas
-
 
 def app(n_days=1):
     reporte_actas = {}
@@ -37,9 +27,10 @@ def app(n_days=1):
     month = str(today.month)
     expedientes = DownloadExpedientes(None)
     expedientes.tmp_data = r"../data/tmp/"
-    list_expedientes = expedientes.get_expedientes_publicados(
-        URL_EXPEDIENTES, current_year
-    )
+    # list_expedientes = expedientes.get_expedientes_publicados(
+    #     URL_EXPEDIENTES, current_year
+    # )
+    list_expedientes = ["../data/tmp/ExpedientesPublicados2022_2203031103.xlsx"]
     for excel in list_expedientes:
         actas = {
             "actas_filtradas": [],
