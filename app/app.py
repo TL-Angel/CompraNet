@@ -18,6 +18,7 @@ import numpy as np
 import time
 from copy import deepcopy
 
+
 def app(n_days=1):
     reporte_actas = {}
     start = time.time()
@@ -31,6 +32,7 @@ def app(n_days=1):
     list_expedientes = expedientes.get_expedientes_publicados(
         URL_EXPEDIENTES, current_year
     )
+    #list_expedientes = ['../data/tmp/ExpedientesPublicados2022_2203031103.xlsx']
     for excel in list_expedientes:
         actas = {
             "actas_filtradas": [],
@@ -65,13 +67,14 @@ def app(n_days=1):
         expedientes_anuales.new_licitaciones = filter_new_licitaciones(
             expedientes_anuales.data_frame_filtered
             )
-        expedientes_anuales.new_licitaciones.to_excel('../data/tmp/lici_news.xlsx')
+        expedientes_anuales.new_licitaciones.to_excel('../data/tmp/lici_news_{}.xlsx'.format(str(today.replace(microsecond=0)).replace(":", "-")))
         # De igual manera debo de preguntar si las 
         print( 'New licitaciones:\n', expedientes_anuales.new_licitaciones)
         # Ahora pregunto que las licitaciones filtradas cuales ya están en DL
         expedientes_anuales.licitaciones_no_dl = filter_licitaciones_no_dl(expedientes_anuales.data_frame_filtered , expedientes_anuales.fecha, expedientes_anuales.data_frame_filtered.columns.tolist())
         print('\n', 'datos en DL:')
         print(expedientes_anuales.licitaciones_no_dl) 
+        expedientes_anuales.licitaciones_no_dl.to_excel('../data/tmp/lici_NO_DL_{}.xlsx'.format(str(today.replace(microsecond=0)).replace(":", "-")))
         #---------------------------
         # Mandar new licitaciones a DB Licitaciones
         #---------------------------
