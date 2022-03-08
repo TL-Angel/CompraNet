@@ -7,13 +7,15 @@ __version__ = "0.1"
 __email__ = "lpz.oscr@gmail.com"
 __status__ = "Development"
 
+import sys
+sys.path.append("..")
+from scraper.aux import *
 import os
-#google_key = '../auth/uniclick-dl-robina-prod-compranet.json'
-google_key = '../auth/literata_prod_datalake.json'
+google_key = '../auth/uniclick-dl-robina-prod-compranet.json'
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_key
 from google.cloud import storage
 from copy import deepcopy
-# ROBINA_BUCK = 'uniclick-dl-robina-prod-billing-and-declarations'
+BUCKET = "uniclick-dl-robina-compranet"
 
 
 def set_google_key(key_location: str):
@@ -36,9 +38,17 @@ class Datalake:
         """
         blob = self.bucket.blob(blob_name)
         blob.upload_from_filename(file_name)
-        if self.verb:
-            msg = f'archivo {file_name} subido a {self.bucket_name}/{blob_name}'
-            print(msg)
+        # response = busqueda_archivo_dl(BUCKET, blob_name)
+        # if response:
+        #     self.verb = True
+        # if self.verb:
+        #     msg = f'archivo {file_name} subido a {self.bucket_name}/{blob_name}'
+        #     print(msg)
+        #     return True
+        # else:
+        #     msg = f'archivo {file_name} NO subido a Data Lake'
+        #     print(msg)
+        #     return False
 
     def upload_bytes(self, data_bytes: bytes, blob_name: str,
                      content_type: str='text/plain'):

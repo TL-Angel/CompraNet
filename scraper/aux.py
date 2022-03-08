@@ -1,25 +1,90 @@
-import requests
-from bs4 import BeautifulSoup
-import os
-from pathlib import Path
-import uuid
 import sys
-sys.path.append("..")
-from scraper.tools import *
+#from tkinter import *
+sys.path.append("../")
+from scraper.DBServer import *
+#from scraper.tools import *
 from src.utils import *
-from fake_useragent import UserAgent
 from connections.datalakeconn import *
 from connections.mongoconn import MongoConn
+import uuid
+from pathlib import Path
+import os
+from bs4 import BeautifulSoup
+import requests
+from fake_useragent import UserAgent
+from google.cloud import storage
 from pymongo import ReplaceOne
 from copy import deepcopy
 import pandas as pd
 import pymssql
 import json
 from datetime import timedelta, datetime as dt
+from glob import glob
 
 # BUCKET = 'uniclick-dl-literata-union'
 BUCKET = "uniclick-dl-robina-compranet"
 folder_bucket = "Actas_Junta_Aclaraciones/"
+
+def set_google_key(key_location: str):
+    """Indica en donde se encuentran la key para acceder al DataLake"""
+    import os
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_location
+
+
+def upload_file_to_dl(blobname, folder, file_name, year, month):
+    """Sube un archivo de CompreNet al DataLake."""
+    blob_name = f"{blobname}/{year}/{month}/{file_name}"
+    full_name = r"{0}/{1}".format(folder, file_name)
+    BUCKET = "uniclick-dl-robina-compranet"
+    set_google_key("../auth/uniclick-dl-robina-prod-compranet.json")
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET)
+    blob = bucket.blob(blob_name)
+    print("subiendo al dl ...")
+    blob.upload_from_filename(full_name)
+    response = busqueda_archivo_dl(BUCKET, blob_name)
+    return response
+
+
+def list_blobs():
+    """Lists all the blobs in the bucket."""
+    BUCKET = "uniclick-dl-robina-compranet"
+    DL = Datalake(BUCKET)
+    # Note: Client.list_blobs requires at least package version 1.17.0.
+    blobs = DL.client.list_blobs(BUCKET)
+    lista_objs = []
+    for blob in blobs:
+        lista_objs.append(blob.name)
+    return lista_objs
+
+def busqueda_archivo_dl(BUCKET, FULL_NAME):
+    set_google_key("../auth/uniclick-dl-robina-prod-compranet.json")
+    storage_client = storage.Client()
+    blobs = storage_client.list_blobs(BUCKET, prefix=FULL_NAME)
+    blobs = [str(x.name) for x in blobs]
+    if len(blobs) > 0:
+        print('Subido a DL ', blobs)
+        return True
+    else:
+        print('no subido ', blobs)
+        return False
+
+
+# ------------------------
+# Reading txt for mongo
+def read_mongo(auth_location):
+    """Funcion para leer el json y conectar al datalake
+
+    Args:
+        auth_location (string): Path de donde se encuentra el archivo json (token) de conexión
+
+    Returns:
+        string: Regresa el token necesario para hacer la conexión entre el server y el data lake
+    """
+    with open(auth_location) as f:
+        uri = f.read()[:-1]
+    return uri
+# ---------------------------
 
 
 def gen_tmp_pdf(pdf_bytes):
@@ -47,7 +112,8 @@ def literata_transcript(pdf_):
     for i in range(4):
         try:
             resp_post = requests.post(upload_url, files=files)
-            txt_file = BeautifulSoup(resp_post.content, "html.parser").find("a").text
+            txt_file = BeautifulSoup(
+                resp_post.content, "html.parser").find("a").text
             url_txt = f"http://192.168.150.158:11733/uploads/{txt_file}"
             # return requests.get(url_txt).content.decode('utf-8')
             break
@@ -88,7 +154,8 @@ def get_extra_data(oppId, extra_data):
                             print(
                                 ":::  Dato localizado  ......................................."
                             )
-                            print("{}: ".format(key), extra_data_obteinied[0].text)
+                            print("{}: ".format(key),
+                                  extra_data_obteinied[0].text)
                             diccionario_salida[key] = extra_data_obteinied[0].text
                         else:
                             print(
@@ -227,7 +294,6 @@ def get_licitantes_mongodb(fecha):
 
 # -----
 def upload_docs_to_mongo_info_licitantes(input_docs):
-
     """Sube los documentos Mongo con un uuid formado con el opportunity id y el id del expediente de cada licitación.
 
     Args:
@@ -433,12 +499,15 @@ def get_dwh_info(data_frame, name: str = "text"):
                 .reset_index()
             )
             if (
-                len([x for x in list(leads.columns) if len(re.findall("level_", x))])
+                len([x for x in list(leads.columns)
+                    if len(re.findall("level_", x))])
                 > 0
             ):
-                leads = leads.drop(columns=["level_{}".format(str(len(columnas)))])
+                leads = leads.drop(
+                    columns=["level_{}".format(str(len(columnas)))])
         if len(d2_temp.loc[0, "cuenta_"]) <= 1:
-            cuenta = pd.DataFrame(d2_temp.loc[0, "cuenta_"]).reset_index(drop=True)
+            cuenta = pd.DataFrame(
+                d2_temp.loc[0, "cuenta_"]).reset_index(drop=True)
             cuentas = pd.concat(
                 [d2_temp.drop(columns=["lead_", "cuenta_"]), cuenta],
                 axis=1,
@@ -451,12 +520,15 @@ def get_dwh_info(data_frame, name: str = "text"):
                 .reset_index()
             )
             if (
-                len([x for x in list(cuentas.columns) if len(re.findall("level_", x))])
+                len([x for x in list(cuentas.columns)
+                    if len(re.findall("level_", x))])
                 > 0
             ):
-                cuentas = cuentas.drop(columns=["level_{}".format(str(len(columnas)))])
+                cuentas = cuentas.drop(
+                    columns=["level_{}".format(str(len(columnas)))])
         ls_other.append(
-            cuentas.merge(leads, how="outer", left_on=columnas, right_on=columnas)
+            cuentas.merge(leads, how="outer",
+                          left_on=columnas, right_on=columnas)
         )
     return pd.concat(ls_other).reset_index(drop=True)
 
@@ -491,10 +563,13 @@ def split_razon_social(s1):
     rgx += ")"
     denominacion = r"((\s)((((B[ ]{0,1})((V)))|((I[ ]{0,1})(((N[ ]{0,1})((C)))))|((P)(( DE | EN | )?)((C)))|(M[ ]{0,1}I)|((I)(( DE | EN | )?)((B[ ]{0,1}P)|(A[ ]{0,1}((S[ ]{0,1}P)|(P)|(S)))))|((F)(( DE | EN | )?)((A)|(C)))|((C[ ]{0,1})((E[ ]{0,1}L)|((POR )?A)))|((A)(( DE | EN | )?)((L(( DE | )?(P[ ]{0,1}R)))|(R(( DE | )?(I[ ]{0,1}C))?)|(B[ ]{0,1}P)|(P(([ ]{0,1}[ELN]))?)|([ACG])))|((U)(( DE | )?)(((S)(( DE | )?(P[ ]{0,1}R)))|(E(([ ]{0,1}C))?)|(C)))|((S[ ]{0,1}O[ ]{0,1}F[ ]{0,1})(((O[ ]{0,1})(([LM](([ ]{0,1}(E[ ]{0,1}(N[ ]{0,1})?R)))?)))|(I[ ]{0,1}P[ ]{0,1}O)))|((S[ ]{0,1}A)(([ ]{0,1}B)|([ ]{0,1}P[ ]{0,1}I)|([ ]{0,1}P[ ]{0,1}I[ ]{0,1}B))?)|((S)((( DE | EN | )?)((I((( DE | EN | )?)((I((( DE | )?(D(( PARA | )?(P[ ]{0,1}M))?))?))|(O[ ]{0,1}L[ ]{0,1})|(R[ ]{0,1}V[ ]{0,1})|(C[ ]{0,1}V)|(R[ ]{0,1}S)|(R[ ]{0,1}[IL])|(C[ ]{0,1}))?))|((C)((( DE | EN | )?)((C[ ]{0,1}V)|(([CP])((( DE | )?((B[ ]{0,1}S)|(S)))|([ ]{0,1}([RC])))?)|(A[ ]{0,1}P)|((POR )?A)|(R[ ]{0,1}[LVS])|(R[ ]{0,1}I)|([SPUL]))?))|(G[ ]{0,1}C)|(N[ ]{0,1}C)|((S[ ]{0,1})(S))|((P)(([ ]{0,1}(A|R)))?)|(L)))))|((S( DE | DE| )?R[ ]{0,1}L)|(DE |DE| )?((R[ ]{0,1}L)|(I[ ]{0,1}P)|(C[ ]{0,1}V)|(R[ ]{0,1}S)|(R[ ]{0,1}I)|(R[ ]{0,1}V)|(O[ ]{0,1}L)|(A[ ]{0,1}R[ ]{0,1}T)|(M[ ]{0,1}I)|((E[ ]{0,1}(N[ ]{0,1})?R)))))(\b))"
     res = re.split(rgx, cleaning_by_line_v3(s1, "nombres"))
-    res = [re.sub(denominacion, "", x) for x in res if len(str(x)) > 0 and x != None]
+    res = [re.sub(denominacion, "", x)
+           for x in res if len(str(x)) > 0 and x != None]
     return res
 
 # ------------------------------------------------------
+
+
 def write_logfile(fileName, result_log):
     with open("../data/logs/logs.txt", "a") as file:
         file.write(
@@ -524,7 +599,7 @@ def proxy_session(url, session):
 def smartproxy(url: str, session2, country=None, sticky=True):
     """Devuelve los proxies seleccionados."""
     user_agent = UserAgent()
-    headers = {'User-Agent': user_agent.random}
+    header = {'User-Agent': user_agent.random}
     user = "robiproxies"
     psswd = "Un1click"
     if sticky:
@@ -552,12 +627,101 @@ def smartproxy(url: str, session2, country=None, sticky=True):
             "https": f"http://{user}:{psswd}@gate.dc.smartproxy.com:2{r}",
         }
     return session2.get(
-        url, 
-        #proxies=proxy,
-        headers = {'User-Agent': user_agent.random}
-        )
+        url,
+        # proxies=proxy,
+        headers=header
+    )
+
+
+def ask_db_licitacion(DF_data, fields=['Codigo', 'OpportunityId']):
+    ls_codigo = DF_data['Codigo'].values.tolist()
+    ls_opid = DF_data['OpportunityId'].values.tolist()
+    sql = Conection('DWH')
+    response_sql = sql.searchData(ls_codigo, ls_opid)
+    response = response_sql.merge(
+        DF_data, left_on=fields, right_on=fields, how='inner')
+    return response
+
+
+def ask_dl_licitacion(fecha, fields=['Codigo', 'OpportunityId', 'UrlActaDL', 'NombreArchivoActa']):
+    sql = Conection('DWH')
+    response = sql.searchDbByDate(fecha, fields=fields)
+    return response
+
+
+def filter_new_licitaciones(df):
+    # Query es un data frame que tiene la intersección de los datos en db Licitación y
+    # con los datos filtrados con las fecha de última modificación
+    query = ask_db_licitacion(df)
+    if len(query) > 0:
+        return df[
+            (df["OpportunityId"].isin(query["OpportunityId"]) == False)
+            & (
+                df["Codigo"].isin(
+                    query["Codigo"])
+                == False
+            )
+            & (
+                df["FechaModificacion"]
+                .apply(str)
+                .isin(query["FechaModificacion"].apply(str))
+                == False
+            )
+        ]
+    else:
+        print("Todos los documentos son nuevos")
+        return df
+
+
+def filter_licitaciones_no_dl(df, fecha, fields):
+    """Método para filtrar las licitaciones que ya están la db de sql, pero no han sido subidas a Data Lake
+    """
+    # Query es un data frame que tiene la intersección de los datos en db Licitación que estan en DL y
+    # con los datos filtrados con las fecha de última modificación
+    query = ask_dl_licitacion(fecha, fields)
+    # Tengo que buscar los licitantastes que tienen la misma FechaModificacion y que tienen URLACTA
+    query =  query[
+        (query["UrlActaDL"].str.contains('proposiciones_'))
+        & (query["NombreArchivoActa"].str.contains('proposiciones_'))
+    ]
+    if len(query) > 0:
+        return df[
+            (df["OpportunityId"].isin(query["OpportunityId"]) == False)
+            & (
+                df["Codigo"].isin(
+                    query["Codigo"])
+                == False
+            )
+        ]
+    else:
+        print("Todos los documentos filtrados NO están en DL")
+        return df
+def update_actas_descargadas(values, columns, table, condicion):
+    """Método para actualizar valores en la base datos de sql"""
+    condicion = """ Codigo = '{}' AND OpportunityId = CAST('{}' as INT)""".format( str(condicion[0]), str(condicion[1]) )
+    sql = Conection('DWH')
+    res = sql.updateValue(values, columns, table, condicion)
+    return res
+def update_actas_subidas_dl( values, columns, table, condicion):
+    """Método para actualizar valores en la base datos de sql"""
+    condicion = """ Codigo = '{}' AND OpportunityId = CAST({} as INT)""".format( str(condicion[0]), str(condicion[1]) )
+    sql = Conection('DWH')
+    res = sql.updateValue(values, columns, table, condicion)
+    return res
+def buscar_pendientes_locales(data):
+    """Busca los actas de proposiciones locales que fueron descargas,
+    dado un data frame con los códigos de expediente y opp Id
+    """
+    local_folder = "../data/tmp/data/"
+    data = data[ ['OpportunityId', 'Codigo']].values
+    names_pattern = [local_folder+"proposiciones_"+str(x[0])+"_"+str(x[1])+"*.*" for x in data]
+    print(names_pattern)
+    paths = [glob(x) for x in names_pattern]
+    return paths
+
+
 
 if __name__ == "__main__":
     upload_txt_to_dl("hola", "prueba")
     DL = Datalake(BUCKET)
-    DL.download_to_file(folder_bucket, "./prueba.txt")
+    DL.download_to_file(folder_bucket, "../data/tmp/prueba.txt")

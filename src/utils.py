@@ -9,7 +9,6 @@ from pymongo import MongoClient
 #####################################################################
 
 
-
 def fix_lines_str(str_):
     """Remueve la newline simple."""
     str_ = re.sub("\n(?!\n)", " ", str_)
@@ -63,7 +62,7 @@ def clean_sample(sample):
     clean_orgs = []
 
     for ent in entities:
-        org = cont[ent[0] : ent[1]]
+        org = cont[ent[0]: ent[1]]
         orgs.append(org)
         clean_orgs.append(limpieza_texto(org))
 
@@ -193,7 +192,7 @@ def replace_entities(data, pyme_lst):
         for i, new_ent in enumerate(new_ents):
             if i == 0:
                 new_cont = cont
-            old = cont[ents[i][0] : ents[i][1]]
+            old = cont[ents[i][0]: ents[i][1]]
             new_cont = new_cont.replace(old, " " + new_ent + " ", 1)
             new_cont = re.sub(" +", " ", new_cont)
             span = re.search(new_ent, new_cont).span()
@@ -225,7 +224,7 @@ def replace_entities_v2(data, pyme_lst):
         for i, new_ent in enumerate(new_ents):
             if i == 0:
                 new_cont = cont
-            old = cont[ents[i][0] : ents[i][1]]
+            old = cont[ents[i][0]: ents[i][1]]
             new_cont = new_cont.replace(old, new_ent, 1)
         for i, new_ent in enumerate(new_ents):
             span = re.search(new_ent, new_cont).span()
@@ -245,8 +244,9 @@ def print_ents(data):
     orgs = []
 
     for ent in entities:
-        org = cont[ent[0] : ent[1]]
+        org = cont[ent[0]: ent[1]]
         print(org)
+
 
 def filter_orgs(ent_lst):
     rgx_lst = [

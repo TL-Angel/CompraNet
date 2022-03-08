@@ -19,6 +19,9 @@ pandas = "*"
 pymssql = "*"
 openpyxl = "*"
 fake-useragent = "*"
+python-pip = "*"
+pyodbc = "*"
+xlsxwriter = "*"
 
 [dev-packages]
 
