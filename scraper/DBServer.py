@@ -303,10 +303,7 @@ class Conection:
         print(self.Msg)
         cursor = self.cnn.cursor()
         cursor.execute(query_id_estados)
-        results = pd.DataFrame(
-            cursor.fetchall(), 
-            columns=["Estado", "IdEstado"]
-            )
+        results = pd.DataFrame(cursor.fetchall(), columns=["Estado", "IdEstado"])
         self.__disconect()
         return results
 
@@ -378,11 +375,24 @@ class Conection:
             str_data = ",".join(
                 [str(x) + "='" + str(y) + "'" for x, y in zip(columns, values)]
             )
-            query_update = """UPDATE {0} 
-                            SET {1} , 
+            query_update = """UPDATE {0}
+                            SET {1} ,
                             FechaModificacionReg =  CAST('{3}' as DATETIME)
                             WHERE {2};""".format(
                 table, str_data, condicion, str(fecha_mod)
+            )
+        if columns == ["ActaPublicada", "FechaModificacion"]:
+            query_update = """UPDATE {0}
+                            SET {3} = CAST('{1}' as INT) , {4} = '{2}'
+                            FechaModificacionReg = CAST('{6}' as DATETIME)
+                            WHERE {5};""".format(
+                table,
+                str(values[0]),
+                str(values[1]),
+                str(columns[0]),
+                str(columns[1]),
+                condicion,
+                str(fecha_mod)
             )
         self.__connect()
         cursor = self.cnn.cursor()
@@ -425,4 +435,3 @@ class Conection:
             results = pd.DataFrame(cursor.fetchall(), columns=cols)
         self.__disconect()
         return results
-

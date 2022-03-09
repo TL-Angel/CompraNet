@@ -1,9 +1,7 @@
 import sys
-
 # from tkinter import *
 sys.path.append("../")
 from scraper.DBServer import *
-
 # from scraper.tools import *
 from src.utils import *
 from connections.datalakeconn import *
@@ -29,6 +27,7 @@ BUCKET = "uniclick-dl-robina-compranet"
 folder_bucket = "Actas_Junta_Aclaraciones/"
 LOCAL_FOLDER = "../data/tmp/data/"
 BLOB_FOLDER = "Acta_Junta_Aclaraciones"
+TIMEOUT = 90
 ########################################
 
 
@@ -48,8 +47,11 @@ def upload_file_to_dl(blobname, folder, file_name, year, month):
     storage_client = storage.Client()
     bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(blob_name)
+    ## For slow upload speed
+    storage.blob._DEFAULT_CHUNKSIZE = 2097152 # 1024 * 1024 B * 2 = 2 MB
+    storage.blob._MAX_MULTIPART_SIZE = 2097152 # 2 MB
     print("subiendo al dl ...")
-    blob.upload_from_filename(full_name)
+    blob.upload_from_filename(full_name, content_type="application/pdf", timeout=TIMEOUT)
     response = busqueda_archivo_dl(BUCKET, blob_name)
     return response
 
@@ -499,8 +501,10 @@ def get_dwh_info(data_frame, name: str = "text"):
         if len(d2_temp.loc[0, "lead_"]) <= 1:
             lead = pd.DataFrame(d2_temp.loc[0, "lead_"]).reset_index(drop=True)
             leads = pd.concat(
-                [d2_temp.drop(columns=["lead_", "cuenta_"]), lead], axis=1, join="outer"
-            )  # .reset_index(drop=True)
+                [d2_temp.drop(columns=["lead_", "cuenta_"]), lead],
+                axis=1,
+                join="outer"
+            )
         else:
             leads = (
                 d2_temp.groupby(columnas)
@@ -552,7 +556,6 @@ def split_razon_social(s1):
         " C[\. ]*V[ \.]*",
         " R[\. ]*L[ \.]*",
         " C[ \.]*S[ \.]*",
-        #' S[ \.]*A[ \.]*',
         " S[ \.]*A[ \.]*P[ \.]*I[ \.]*",
         " S[ \.]*A[ \.]*A[\.]*",
         " S[ \.]*A[ \.]*C[\.]*",
@@ -587,6 +590,12 @@ def write_report_actas(fileName):
     #    file.write(json.dumps(json.JSONEncoder().encode(fileName)))
     # file.close()
     pd.DataFrame(fileName).to_csv("../data/tmp/reporte_actas.csv")
+
+def write_txt(fileName, content):
+    with open(fileName, "a") as file:
+        file.write(
+            content
+            )
 
 
 # -------------------------------------------------------
@@ -712,20 +721,34 @@ def buscar_pendientes_locales(data):
     dado un data frame con los códigos de expediente y opp Id
     """
     data = data[["OpportunityId", "Codigo"]].values
+    opportunityId = [x[0] for x in data]
+    Codigo = [x[1] for x in data]
     names_pattern = [
         LOCAL_FOLDER + "proposiciones_" + str(x[0]) + "_" + str(x[1]) + "*.*"
         for x in data
     ]
-    print(names_pattern)
     paths = [glob(x) for x in names_pattern]
-    return paths
+    return paths, opportunityId, Codigo
 
 
 def preparar_paths(data):
     """Método para preparar las direcciones locales a direcciones en DL"""
-    names = [x.replace(LOCAL_FOLDER, "") for x in data]
+    names = [x[0].replace(LOCAL_FOLDER, "") for x in data]
     data = [x.split("_") for x in names]
-    data = [[]]
+    dates = [[x[3][:4], x[3][4:]] for x in data]
+    blob_names = [
+        BLOB_FOLDER + "/" + date[0] + "/" + date[1].zfill(2) + "/" + file_name
+        for date, file_name in zip(dates, names)
+    ]
+    if len(names) == len(dates):
+        return names, dates, blob_names
+    return False
+
+
+def get_file_size_in_megabytes(file_path):
+    """ Get size of file at given path in bytes"""
+    size = os.path.getsize(file_path)
+    return size/(1024*1024)
 
 
 if __name__ == "__main__":
