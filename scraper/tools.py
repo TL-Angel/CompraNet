@@ -153,7 +153,7 @@ class ExpedientesPublicados(object):
                     # print(e)
                     df.loc[:, x] = df.loc[:, x].apply(str)
                     df.loc[:, x] = df.loc[:, x].apply(
-                        string_time, args=("%Y/%m/%d %H:%M",)
+                        string_time, args=("%Y/%m/%d %H:%M:%S",)
                     )
                     df.loc[:, x] = df.loc[:, x].apply(
                         lambda x: x.replace(
@@ -282,20 +282,20 @@ class DownloadExpedientes(object):
         # FILTRAR POR AÑO Y MES PARA LUEGO DESCARGAR LAS ACTAS
         salida = []
         try:
-            if (len(self.child.licitaciones_no_dl) == 0) & (
+            if (len(self.child.uploaded_no_downloaded) == 0) & (
                 len(self.child.new_licitaciones) == 0
             ):
                 print("Sin datos que actualizar")
                 return None
-            elif len(self.child.licitaciones_no_dl) == 0:
+            elif (len(self.child.uploaded_no_downloaded) == 0) & (len(self.child.new_licitaciones) > 0):
                 data = self.child.new_licitaciones
-            elif len(self.child.new_licitaciones) == 0:
-                data = self.child.licitaciones_no_dl
+            elif (len(self.child.new_licitaciones) == 0) & (len(self.child.uploaded_no_downloaded) > 0):
+                data = self.child.uploaded_no_downloaded
             else:
                 data = pd.concat(
                     [
                         self.child.new_licitaciones,
-                        self.child.licitaciones_no_dl,
+                        self.child.uploaded_no_downloaded,
                     ],
                     ignore_index=True,
                 )
@@ -307,6 +307,7 @@ class DownloadExpedientes(object):
             # ------------------------------------------------------------
             self.child.reporte_actas["total_actas_a_descargar"].append(len(data))
             self.write_logfile("Licitaciones", result_log)
+            sleep_time = 10
             for id_exp, id_opt, ActaPublicada, UrlActaDL, NombreArchivoActa in data.loc[
                 :,
                 [
@@ -333,6 +334,9 @@ class DownloadExpedientes(object):
                     result_log = "Error al solicitar descarga de acta: {}".format(e)
                     id_file = "opportunity:{}_expediente:{}".format(id_opt, id_exp)
                     self.write_logfile(id_file, result_log)
+                r_t = random.choice(range(-int(sleep_time*0.7), int(sleep_time*0.7)))
+                t = int(sleep_time) + r_t
+                time.sleep(t)
             return salida
         except Exception as e:
             print("Error al filtrar actas: {}".format(e))
@@ -588,6 +592,8 @@ class DownloadExpedientes(object):
                 self.write_logfile(fileName, result_log)
                 print(result_log)
                 self.child.reporte_actas["actas_no_descargadas"].append(fileName)
+            finally:
+                session.close()
 
     def get_expedientes_publicados(self, URL_EXPEDIENTES, current_year):
         """Método para gestionar la descarga de la lista de expedientes de la junta de actas.

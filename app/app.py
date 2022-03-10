@@ -32,6 +32,7 @@ def app(n_days=1):
     list_expedientes = expedientes.get_expedientes_publicados(
         URL_EXPEDIENTES, current_year
     )
+    #list_expedientes = ["../data/tmp/ExpedientesPublicados2022_2203090914.xlsx"]
     for excel in list_expedientes:
         actas = {
             "actas_filtradas": [],
@@ -60,25 +61,34 @@ def app(n_days=1):
         expedientes_anuales.preparacion_estados()
         expedientes_anuales.mapear_id_estados()
         expedientes_anuales.data_frame_filtered = expedientes_anuales.data_frame_filtered.fillna('')
-        print('DF filtradas:\n')
-        print(expedientes_anuales.data_frame_filtered)
+        expedientes_anuales.data_frame_filtered.to_excel('../data/tmp/data_filtrada_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        print('DF filtradas:  ',len(expedientes_anuales.data_frame_filtered))
         # Las de abajo deben de ser las licitaciones filtradas - las licitaciones de la db
-        expedientes_anuales.new_licitaciones = filter_new_licitaciones(
+        expedientes_anuales.new_licitaciones, expedientes_anuales.uploaded_db_licitaciones = filter_new_licitaciones(
             expedientes_anuales.data_frame_filtered
             )
         expedientes_anuales.new_licitaciones.to_excel('../data/tmp/lici_news_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
-        # De igual manera debo de preguntar si las 
-        print( 'New licitaciones:\n', expedientes_anuales.new_licitaciones)
+        expedientes_anuales.uploaded_db_licitaciones.to_excel('../data/tmp/lici_uploaded_db_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        print( 'New licitaciones:  ',len( expedientes_anuales.new_licitaciones))
+        print( 'uploaded db:  ',len( expedientes_anuales.uploaded_db_licitaciones))
+        expedientes_anuales.uploaded_no_downloaded = filtrar_uploaded_no_downloaded(expedientes_anuales.uploaded_db_licitaciones)
+        expedientes_anuales.uploaded_downloaded = filtrar_uploaded_downloaded(expedientes_anuales.uploaded_db_licitaciones, expedientes_anuales.uploaded_no_downloaded)
+        expedientes_anuales.uploaded_no_downloaded.to_excel('../data/tmp/lici_uploaded_db_no_downloaded_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        expedientes_anuales.uploaded_downloaded.to_excel('../data/tmp/lici_uploaded_db_yes_downloaded_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        print("Uploaded no downloaded: ", len(expedientes_anuales.uploaded_no_downloaded))
+        print("Uploaded yes downloaded: ", len(expedientes_anuales.uploaded_downloaded))
         # Ahora pregunto que las licitaciones filtradas cuales ya están en DL
         expedientes_anuales.licitaciones_no_dl = filter_licitaciones_no_dl(expedientes_anuales.data_frame_filtered , expedientes_anuales.fecha, expedientes_anuales.data_frame_filtered.columns.tolist())
-        print('\n', 'datos en DL:')
-        print(expedientes_anuales.licitaciones_no_dl) 
         expedientes_anuales.licitaciones_no_dl.to_excel('../data/tmp/lici_NO_DL_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
         #---------------------------
         # Mandar new licitaciones a DB Licitaciones
         #---------------------------
         sql = Conection('DWH')
         sql.InsertData(expedientes_anuales.new_licitaciones, TableName='Licitacion', FieldList=expedientes_anuales.new_licitaciones.columns.tolist())
+        #--------------------------
+        # Actualizar archivos existentes en db con nuevos cambios
+        #--------------------------
+        update_data_from_db2(expedientes_anuales.uploaded_no_downloaded)
         #---- Descargar actas -----------
         downloaded = DownloadExpedientes(expedientes_anuales)
         downloaded.tmp_data = r"../data/tmp/data"

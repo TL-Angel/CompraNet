@@ -665,15 +665,21 @@ def ask_dl_licitacion(
 def filter_new_licitaciones(df):
     # Query es un data frame que tiene la intersección de los datos en db Licitación y
     # con los datos filtrados con las fecha de última modificación
+    if len(df) == 0:
+        print("No hay nuevas licitaciones, ni actas que actalizar.Todo = 0")
+        return df, df
     query = ask_db_licitacion(df)
     if len(query) > 0:
         return df[
             (df["OpportunityId"].isin(query["OpportunityId"]) == False)
             & (df["Codigo"].isin(query["Codigo"]) == False)
+        ], df[
+            (df["OpportunityId"].isin(query["OpportunityId"]) == True)
+            & (df["Codigo"].isin(query["Codigo"]) == True)
         ]
     else:
         print("Todos los documentos son nuevos")
-        return df
+        return df, pd.DataFrame()
 
 
 def filter_licitaciones_no_dl(df, fecha, fields):
@@ -749,6 +755,157 @@ def get_file_size_in_megabytes(file_path):
     """ Get size of file at given path in bytes"""
     size = os.path.getsize(file_path)
     return size/(1024*1024)
+
+def filtrar_uploaded_no_downloaded(data):
+    """Función para filtrar las licitaciones que ya fueron cargadas
+    previamente a la DB de SQL, pero que en la fecha en cual fueron
+    actualizadas no se ha descargado el acta. Es decir UrlActaDL = ''
+    y ActaPublicada = 0. Y utilizar UPDATE.
+
+    Args:
+        data (any): Data frame con las licitaciones filtradas
+        query (str): Query para buscar las actas
+    """
+    Codigo = ",".join([str(x) for x in data.Codigo.tolist()])
+    OppId = ",".join([str(x) for x in data.OpportunityId.tolist()])
+    query = """
+    SELECT *
+    FROM [DWH_ANALYTICS].[dbo].[Licitacion]
+    WHERE Codigo IN ({0}) 
+    AND OpportunityId IN ({1})
+    AND ActaPublicada = CAST(0 as INT) 
+    AND UrlActaDL = '' 
+    """.format(Codigo, OppId)
+    sql = Conection("DWH")
+    query = sql.getQuery(query)
+    return data[
+        (data["OpportunityId"].isin(query["OpportunityId"]) == True)
+        & (
+            data["Codigo"].isin(query["Codigo"])
+            == True
+        )
+    ]
+
+def filtrar_uploaded_downloaded(df, query):
+    """Función para filtrar las licitaciones que ya fueron cargadas
+    previamente a la DB de SQL,y que ya se descargaron pero que su 
+    fecha de última de actualización ya cambió. Es decir UrlActaDL =/ ''
+    y ActaPublicada =/ 0.
+
+    Args:
+        data (any): Data frame con las licitaciones filtradas que ya están en db
+        query (any): Data frame contine licitaciones que ya están en db y que ya
+                    no tiene actas descargas
+    """
+    return df[
+        (df["OpportunityId"].isin(query["OpportunityId"]) == False)
+        & (
+            df["Codigo"].isin(query["Codigo"])
+            == False
+        )
+    ]
+def update_data_from_db(data):
+    """Método para actualizar los datos de las licitacions que ya se tenian previamente en DB,
+    pero que tienen cambios en, al menos, la fecha de última actualización. Para 
+    ello se actualizara
+
+    Args:
+        data (aby): Dataframe con las licitaciones que han cambiado en su fecha de última actualización
+                    y que ya se tenía previamente en DB.
+    """
+    columns = data.columns.tolist()
+    col_blocked = ["Codigo", "OpportunityId",
+                  'URLAnuncio', 'ActaPublicada', 'UrlActaDL', 
+                   'NombreArchivoActa', 'FechaCreacionReg']
+    col_condicion = ["Codigo", "OpportunityId"]
+    for x in col_blocked: columns.remove(x)
+    dat = data[columns]
+    dat = ",".join([str(col)+"=("+",".join([str(x) for x in dat[col].tolist()])+")" for col in columns])
+    data = data[col_condicion]
+    condicion = " AND ".join([str(col)+" IN ("+",".join([str(x) for x in data[col].tolist()])+")" for col in col_condicion])
+    table = "[DWH_ANALYTICS].[dbo].[Licitacion]"
+    fecha_mod =str(dt.today().replace(microsecond=0))
+    query_update = """UPDATE {0}
+                    SET {1} ,
+                    FechaModificacionReg =  CAST('{3}' as DATETIME)
+                    WHERE {2};""".format(
+        table, dat, condicion, str(fecha_mod)
+    )
+    sql = Conection("DWH")
+    query = sql.updateQuery(query_update)
+    return query
+def update_data_from_db2(data):
+    """Método para actualizar los datos de las licitacions que ya se tenian previamente en DB,
+    pero que tienen cambios en, al menos, la fecha de última actualización. Para 
+    ello se actualizara
+
+    Args:
+        data (aby): Dataframe con las licitaciones que han cambiado en su fecha de última actualización
+                    y que ya se tenía previamente en DB.
+    """
+    fecha_mod_reg =str(dt.today().replace(microsecond=0))
+    table = "[DWH_ANALYTICS].[dbo].[Licitacion]"
+    columns = data.columns.tolist()
+    col_blocked = ['URLAnuncio', 'ActaPublicada', 'UrlActaDL', 
+                   'NombreArchivoActa', 'FechaCreacionReg']
+    for x in col_blocked: columns.remove(x)
+    dat = data[columns]
+    for i, row in list(dat.iterrows())[:2]:
+        codigo = str(row[0])
+        numproc = str(row[1])
+        s_numproc = """NumProc = '{}'""".format(str(numproc))
+        caractproc = row[2]
+        s_caractproc = """CaracterProc = '{}'""".format(str(caractproc))
+        formaproc = row[3]
+        s_formaproc = """FormaProc = '{}'""".format(str(formaproc))
+        articuloexcep = row[4]
+        s_articuloexcep = """ArticuloExcepcion = '{}'""".format(str(articuloexcep))
+        refexp = row[5]
+        s_refexp = """RefExpediente = '{}'""".format(str(refexp))
+        tituloexp = row[6]
+        s_tituloexp = """TituloExpediente = '{}'""".format(str(tituloexp))
+        plantexp = row[7]
+        s_plantexp = """PlantillaExpediente = '{}'""".format(str(plantexp))
+        descanu = row[8]
+        s_descanu = """DescAnuncio = '{}'""".format(str(descanu))
+        claveuc = row[9]
+        s_claveuc = """ClaveUC = '{}'""".format(str(claveuc))
+        nombreuc = str(row[10])
+        s_nombreuc = """NombreUC = '{}'""".format(nombreuc)
+        operador = str(row[11])
+        s_operador = """Operador = '{}'""".format(operador)
+        correoop = str(row[12])
+        s_correop = """CorreoOperador = '{}'""".format(correoop)
+        idestado = str(row[13]).zfill(2)
+        s_idestado = """IdEstado = '{}'""".format(idestado)
+        tipocontrac = str(row[14])
+        s_tipocontrac = """TipoContratacion = '{}'""".format(tipocontrac)
+        fechapub = str(row[15])
+        s_fechapub = """FechaPublicacion = '{}'""".format(fechapub)
+        vigencia = str(row[16])
+        s_vigencia = """Vigencia = '{}'""".format(vigencia)
+        claveog = str(row[17])
+        s_claveog = """ClaveCOG = '{}'""".format(claveog)
+        fechacreacion = str(row[18])
+        s_fechacreacion = """FechaCreacion = '{}'""".format(fechacreacion)
+        fechamod = str(row[19])
+        s_fechamod = """FechaModificacion = '{}'""".format(fechamod)        
+        oppId = str(row[20])
+        condicion = """Codigo = '{}' AND OpportunityID = {} """.format(str(codigo), str(oppId))
+        sets = [s_numproc, s_caractproc,s_formaproc,s_articuloexcep,s_refexp, s_tituloexp,s_plantexp, s_descanu,s_claveuc ,s_nombreuc, 
+        s_operador,s_correop,s_idestado, s_tipocontrac, s_fechapub, s_vigencia, s_claveog, s_fechacreacion, 
+        s_fechamod]
+        sets = ", ".join(sets)
+        query_update = """
+        UPDATE {0}
+        SET {1}, FechaModificacionReg = '{3}'
+        WHERE {2}
+        """.format(table, sets, condicion, fecha_mod_reg)
+        sql = Conection("DWH")
+        query = sql.updateQuery(query_update)
+        print(query)
+    return True
+
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ __version__ = "1.0"
 __email__ = "atellezl@outlook.com"
 __status__ = "Development"
 
+from copy import deepcopy
 import sys
 
 sys.path.append("../")
@@ -424,6 +425,7 @@ class Conection:
 
         Args:
             query (str): Query en formato string a utilizar
+            campos (list): Lista con campos para la salida del DF. Opcional
         """
         self.__connect()
         cursor = self.cnn.cursor()
@@ -435,3 +437,17 @@ class Conection:
             results = pd.DataFrame(cursor.fetchall(), columns=cols)
         self.__disconect()
         return results
+
+    def updateQuery(self, query: str, campos: list = []):
+        """Método para actualizar datos a partir de un query
+        previamente estructurada
+
+        Args:
+            query (str): Query en formato string a utilizar
+            campos (list): Lista con campos para la salida del DF. Opcional
+        """
+        self.__connect()
+        cursor = self.cnn.cursor()
+        cursor.execute(query)
+        self.__disconect()
+        return True
