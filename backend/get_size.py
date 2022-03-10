@@ -2,7 +2,7 @@ import sys
 sys.path.append("../")
 import os
 import time
-from scraper.aux import *
+from scraper.aux_compranet import *
 from scraper.DBServer import *
 ##############################
 # CONFIG

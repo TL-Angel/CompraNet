@@ -9,7 +9,7 @@ __status__ = "Development"
 
 import sys
 sys.path.append("..")
-from scraper.aux import *
+from scraper.aux_compranet import *
 import os
 google_key = '../auth/uniclick-dl-robina-prod-compranet.json'
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_key

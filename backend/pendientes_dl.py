@@ -1,7 +1,7 @@
 import sys
 sys.path.append("../")
 from scraper.DBServer import *
-from scraper.aux import *
+from scraper.aux_compranet import *
 import pandas as pd
 import time
 ##############################
