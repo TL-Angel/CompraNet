@@ -1,0 +1,29 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pymongo = "*"
+unicodedata2 = "*"
+python-multipart = "*"
+bs4 = "*"
+requests = "*"
+pdf2image = "*"
+pillow = "*"
+google-cloud-storage = "*"
+pipfile = "*"
+numpy = "*"
+requests-html = "*"
+pandas = "*"
+pymssql = "*"
+openpyxl = "*"
+fake-useragent = "*"
+python-pip = "*"
+pyodbc = "*"
+xlsxwriter = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.8"
