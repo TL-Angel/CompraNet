@@ -4,9 +4,9 @@ import sys
 sys.path.append("../")
 from connections.datalakeconn import *
 from scraper.tools import *
-from scraper.aux import *
+from scraper.aux_compranet import *
 from scraper.SQLServer import *
-from scraper.aux import write_logfile, write_report_actas
+from scraper.aux_compranet import write_logfile, write_report_actas
 from requests_html import HTMLSession
 import re
 from datetime import date, timedelta, datetime as dt
@@ -29,10 +29,10 @@ def app(n_days=1):
     month = str(today.month)
     expedientes = DownloadExpedientes(None)
     expedientes.tmp_data = r"../data/tmp/"
-    list_expedientes = expedientes.get_expedientes_publicados(
-        URL_EXPEDIENTES, current_year
-    )
-    #list_expedientes = ["../data/tmp/ExpedientesPublicados2022_2203090914.xlsx"]
+    # list_expedientes = expedientes.get_expedientes_publicados(
+    #     URL_EXPEDIENTES, current_year
+    # )
+    list_expedientes = ["../data/tmp/ExpedientesPublicados2022_2203090914.xlsx"]
     for excel in list_expedientes:
         actas = {
             "actas_filtradas": [],
@@ -73,13 +73,13 @@ def app(n_days=1):
         print( 'uploaded db:  ',len( expedientes_anuales.uploaded_db_licitaciones))
         expedientes_anuales.uploaded_no_downloaded = filtrar_uploaded_no_downloaded(expedientes_anuales.uploaded_db_licitaciones)
         expedientes_anuales.uploaded_downloaded = filtrar_uploaded_downloaded(expedientes_anuales.uploaded_db_licitaciones, expedientes_anuales.uploaded_no_downloaded)
-        expedientes_anuales.uploaded_no_downloaded.to_excel('../data/tmp/lici_uploaded_db_no_downloaded_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        expedientes_anuales.uploaded_no_downloaded.to_excel('../data/tmp/lici_uploaded_db_no_downloaded_222_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
         expedientes_anuales.uploaded_downloaded.to_excel('../data/tmp/lici_uploaded_db_yes_downloaded_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
         print("Uploaded no downloaded: ", len(expedientes_anuales.uploaded_no_downloaded))
         print("Uploaded yes downloaded: ", len(expedientes_anuales.uploaded_downloaded))
         # Ahora pregunto que las licitaciones filtradas cuales ya están en DL
-        expedientes_anuales.licitaciones_no_dl = filter_licitaciones_no_dl(expedientes_anuales.data_frame_filtered , expedientes_anuales.fecha, expedientes_anuales.data_frame_filtered.columns.tolist())
-        expedientes_anuales.licitaciones_no_dl.to_excel('../data/tmp/lici_NO_DL_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        #expedientes_anuales.licitaciones_no_dl = filter_licitaciones_no_dl(expedientes_anuales.data_frame_filtered , expedientes_anuales.fecha, expedientes_anuales.data_frame_filtered.columns.tolist())
+        #expedientes_anuales.licitaciones_no_dl.to_excel('../data/tmp/lici_NO_DL_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
         #---------------------------
         # Mandar new licitaciones a DB Licitaciones
         #---------------------------

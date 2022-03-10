@@ -1,7 +1,7 @@
 import sys
 
 sys.path.append("../")
-from scraper.aux import *
+from scraper.aux_compranet import *
 from scraper.DBServer import *
 from connections.datalakeconn import *
 from src.utils import *

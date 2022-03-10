@@ -786,6 +786,30 @@ def filtrar_uploaded_no_downloaded(data):
         )
     ]
 
+def filtrar_uploaded_no_downloaded2(data):
+    """Función para filtrar las licitaciones que ya fueron cargadas
+    previamente a la DB de SQL, pero que en la fecha en cual fueron
+    actualizadas no se ha descargado el acta. Es decir UrlActaDL = ''
+    y ActaPublicada = 0. Y utilizar UPDATE.
+
+    Args:
+        data (any): Data frame con las licitaciones filtradas
+        query (str): Query para buscar las actas
+    """
+    Codigo = ",".join([str(x) for x in data.Codigo.tolist()])
+    OppId = ",".join([str(x) for x in data.OpportunityId.tolist()])
+    query = """
+    SELECT *
+    FROM [DWH_ANALYTICS].[dbo].[Licitacion]
+    WHERE Codigo IN ({0}) 
+    AND OpportunityId IN ({1})
+    AND ActaPublicada = CAST(0 as INT) 
+    AND UrlActaDL = '' 
+    """.format(Codigo, OppId)
+    sql = Conection("DWH")
+    query = sql.getQuery(query)
+    return query
+
 def filtrar_uploaded_downloaded(df, query):
     """Función para filtrar las licitaciones que ya fueron cargadas
     previamente a la DB de SQL,y que ya se descargaron pero que su 
