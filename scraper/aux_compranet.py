@@ -599,13 +599,12 @@ def write_txt(fileName, content):
 
 
 # -------------------------------------------------------
-def proxy_session(url, session):
+def proxy():
     user = "robiproxies"
     pwd = "Un1click"
     port_rnd = str(random.randint(1, 9999)).zfill(4)
     proxy = f"http://{user}:{pwd}@gate.dc.smartproxy.com:2{port_rnd}"
-    print(proxy)
-    return session.get(url, proxies={"http": proxy, "https": proxy})
+    return {"http": proxy, "https": proxy}
 
 
 def smartproxy(url: str, session2, country=None, sticky=True):
@@ -640,7 +639,7 @@ def smartproxy(url: str, session2, country=None, sticky=True):
         }
     return session2.get(
         url,
-        # proxies=proxy,
+        proxies=proxy,
         headers=header,
     )
 
@@ -650,8 +649,13 @@ def ask_db_licitacion(DF_data, fields=["Codigo", "OpportunityId"]):
     ls_opid = DF_data["OpportunityId"].values.tolist()
     sql = Conection("DWH")
     response_sql = sql.searchData(ls_codigo, ls_opid)
-    response = response_sql.merge(DF_data, left_on=fields, right_on=fields, how="inner")
-    return response
+    if len(response_sql) > 0:
+        return DF_data[
+                (DF_data["OpportunityId"].isin(response_sql["OpportunityId"]) == True)
+                & (DF_data["Codigo"].isin(response_sql["Codigo"]) == True)
+            ]
+    else:
+        return pd.DataFrame()
 
 
 def ask_dl_licitacion(
@@ -720,6 +724,15 @@ def update_actas_subidas_dl(values, columns, table, condicion):
     sql = Conection("DWH")
     res = sql.updateValue(values, columns, table, condicion)
     return res
+    
+def update_actas(values, columns, table, condicion):
+    """Método para actualizar valores en la base datos de sql"""
+    condicion = """ Codigo = '{0}' AND OpportunityId = CAST({1} as INT)""".format(
+        str(condicion[0]), str(condicion[1])
+    )
+    sql = Conection("DWH")
+    res = sql.updateValue(values, columns, table, condicion)
+    return res
 
 
 def buscar_pendientes_locales(data):
@@ -750,7 +763,6 @@ def preparar_paths(data):
         return names, dates, blob_names
     return False
 
-
 def get_file_size_in_megabytes(file_path):
     """ Get size of file at given path in bytes"""
     size = os.path.getsize(file_path)
@@ -766,8 +778,8 @@ def filtrar_uploaded_no_downloaded(data):
         data (any): Data frame con las licitaciones filtradas
         query (str): Query para buscar las actas
     """
-    Codigo = ",".join([str(x) for x in data.Codigo.tolist()])
-    OppId = ",".join([str(x) for x in data.OpportunityId.tolist()])
+    Codigo = ",".join(["'"+str(x)+"'" for x in data.Codigo.tolist()])
+    OppId = ",".join(["CAST('"+str(x)+"' as INT)" for x in data.OpportunityId.tolist()])
     query = """
     SELECT *
     FROM [DWH_ANALYTICS].[dbo].[Licitacion]
@@ -800,7 +812,7 @@ def filtrar_uploaded_no_downloaded2(data):
     OppId = ",".join([str(x) for x in data.OpportunityId.tolist()])
     query = """
     SELECT *
-    FROM [DWH_ANALYTICS].[dbo].[Licitacion]
+    FROM DWH_ANALYTICS.dbo.Licitacion
     WHERE Codigo IN ({0}) 
     AND OpportunityId IN ({1})
     AND ActaPublicada = CAST(0 as INT) 
@@ -858,6 +870,7 @@ def update_data_from_db(data):
     sql = Conection("DWH")
     query = sql.updateQuery(query_update)
     return query
+
 def update_data_from_db2(data):
     """Método para actualizar los datos de las licitacions que ya se tenian previamente en DB,
     pero que tienen cambios en, al menos, la fecha de última actualización. Para 
@@ -867,70 +880,67 @@ def update_data_from_db2(data):
         data (aby): Dataframe con las licitaciones que han cambiado en su fecha de última actualización
                     y que ya se tenía previamente en DB.
     """
+    print("Actualizando las base de datos ...")
     fecha_mod_reg =str(dt.today().replace(microsecond=0))
-    table = "[DWH_ANALYTICS].[dbo].[Licitacion]"
+    table = "DWH_ANALYTICS.dbo.Licitacion"
     columns = data.columns.tolist()
     col_blocked = ['URLAnuncio', 'ActaPublicada', 'UrlActaDL', 
                    'NombreArchivoActa', 'FechaCreacionReg']
     for x in col_blocked: columns.remove(x)
     dat = data[columns]
-    for i, row in list(dat.iterrows())[:2]:
+    for i, row in dat.iterrows():
         codigo = str(row[0])
         numproc = str(row[1])
-        s_numproc = """NumProc = '{}'""".format(str(numproc))
+        s_numproc = "NumProc = '{}'".format(str(numproc))
         caractproc = row[2]
-        s_caractproc = """CaracterProc = '{}'""".format(str(caractproc))
+        s_caractproc = "CaracterProc = '{}'".format(str(caractproc))
         formaproc = row[3]
-        s_formaproc = """FormaProc = '{}'""".format(str(formaproc))
+        s_formaproc = "FormaProc = '{}'".format(str(formaproc))
         articuloexcep = row[4]
-        s_articuloexcep = """ArticuloExcepcion = '{}'""".format(str(articuloexcep))
+        s_articuloexcep = "ArticuloExcepcion = '{}'".format(str(articuloexcep))
         refexp = row[5]
-        s_refexp = """RefExpediente = '{}'""".format(str(refexp))
+        s_refexp = "RefExpediente = '{}'".format(str(refexp))
         tituloexp = row[6]
-        s_tituloexp = """TituloExpediente = '{}'""".format(str(tituloexp))
+        s_tituloexp = "TituloExpediente = '{}'".format(str(tituloexp))
         plantexp = row[7]
-        s_plantexp = """PlantillaExpediente = '{}'""".format(str(plantexp))
+        s_plantexp = "PlantillaExpediente = '{}'".format(str(plantexp))
         descanu = row[8]
-        s_descanu = """DescAnuncio = '{}'""".format(str(descanu))
+        s_descanu = "DescAnuncio = '{}'".format(str(descanu))
         claveuc = row[9]
-        s_claveuc = """ClaveUC = '{}'""".format(str(claveuc))
+        s_claveuc = "ClaveUC = '{}'".format(str(claveuc))
         nombreuc = str(row[10])
-        s_nombreuc = """NombreUC = '{}'""".format(nombreuc)
+        s_nombreuc = "NombreUC = '{}'".format(nombreuc)
         operador = str(row[11])
-        s_operador = """Operador = '{}'""".format(operador)
+        s_operador = "Operador = '{}'".format(operador)
         correoop = str(row[12])
-        s_correop = """CorreoOperador = '{}'""".format(correoop)
+        s_correop = "CorreoOperador = '{}'".format(correoop)
         idestado = str(row[13]).zfill(2)
-        s_idestado = """IdEstado = '{}'""".format(idestado)
+        s_idestado = "IdEstado = '{}'".format(idestado)
         tipocontrac = str(row[14])
-        s_tipocontrac = """TipoContratacion = '{}'""".format(tipocontrac)
+        s_tipocontrac = "TipoContratacion = '{}'".format(tipocontrac)
         fechapub = str(row[15])
-        s_fechapub = """FechaPublicacion = '{}'""".format(fechapub)
+        s_fechapub = "FechaPublicacion = CAST('{}' as DATETIME)".format(fechapub)
         vigencia = str(row[16])
-        s_vigencia = """Vigencia = '{}'""".format(vigencia)
+        s_vigencia = "Vigencia = CAST('{}' as DATETIME)".format(vigencia)
         claveog = str(row[17])
-        s_claveog = """ClaveCOG = '{}'""".format(claveog)
+        s_claveog = "ClaveCOG = '{}'".format(claveog)
         fechacreacion = str(row[18])
-        s_fechacreacion = """FechaCreacion = '{}'""".format(fechacreacion)
+        s_fechacreacion = "FechaCreacion = CAST('{}' as DATETIME)".format(fechacreacion)
         fechamod = str(row[19])
-        s_fechamod = """FechaModificacion = '{}'""".format(fechamod)        
+        s_fechamod = "FechaModificacion = CAST('{}' AS DATETIME)".format(fechamod)       
         oppId = str(row[20])
-        condicion = """Codigo = '{}' AND OpportunityID = {} """.format(str(codigo), str(oppId))
+        condicion = "Codigo = '{0}' AND OpportunityID = CAST('{1}' as INT)".format(str(codigo), str(oppId))
         sets = [s_numproc, s_caractproc,s_formaproc,s_articuloexcep,s_refexp, s_tituloexp,s_plantexp, s_descanu,s_claveuc ,s_nombreuc, 
         s_operador,s_correop,s_idestado, s_tipocontrac, s_fechapub, s_vigencia, s_claveog, s_fechacreacion, 
         s_fechamod]
         sets = ", ".join(sets)
-        query_update = """
-        UPDATE {0}
-        SET {1}, FechaModificacionReg = '{3}'
-        WHERE {2}
-        """.format(table, sets, condicion, fecha_mod_reg)
+        query_update = """UPDATE {0}
+        SET {1}, FechaModificacionReg = CAST('{3}' as DATETIME)
+        WHERE {2}""".format(table, sets, condicion, fecha_mod_reg)
         sql = Conection("DWH")
+        print(query_update)
         query = sql.updateQuery(query_update)
-        print(query)
-    return True
-
-
+    return query
 
 if __name__ == "__main__":
     upload_txt_to_dl("hola", "prueba")

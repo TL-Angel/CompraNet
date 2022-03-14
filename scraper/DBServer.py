@@ -333,12 +333,12 @@ class Conection:
 
     def searchData(self, ls_codigo, ls_opid, fields=["Codigo", "OpportunityId"]):
         str_fields = ",".join([str(x) for x in fields])
-        str_codigo = ",".join([str(x) for x in ls_codigo])
-        str_opid = ",".join([str(x) for x in ls_opid])
+        str_codigo = ",".join(["'"+str(x)+"'" for x in ls_codigo])
+        str_opid = ",".join(["CAST("+str(x)+" as INT)" for x in ls_opid])
         query_licitacion = """SELECT {2}
                             FROM DWH_ANALYTICS.dbo.Licitacion 
                             WHERE Codigo IN ({0})
-                            AND OpportunityId IN ({1}); """.format(
+                            AND OpportunityId IN ({1})""".format(
             str_codigo, str_opid, str_fields
         )
         self.__connect()
@@ -352,7 +352,7 @@ class Conection:
         str_fields = ",".join([str(x) for x in fields])
         query_licitacion = """SELECT {0}
                             FROM DWH_ANALYTICS.dbo.Licitacion 
-                            WHERE FechaModificacion >= '{1}';""".format(
+                            WHERE FechaModificacion >= '{1}'""".format(
             str_fields, str(fecha)
         )
         self.__connect()
@@ -368,8 +368,9 @@ class Conection:
         if columns == "ActaPublicada":
             query_update = """UPDATE {0} 
                             SET {2} = CAST('{1}' as INT) , 
+                            Url_visitada = CAST('1' as INT),
                             FechaModificacionReg = CAST('{4}' as DATETIME)    
-                            WHERE {3};""".format(
+                            WHERE {3}""".format(
                 table, str(values), str(columns), condicion, str(fecha_mod)
             )
         if type(columns) == type([1]):
@@ -379,14 +380,14 @@ class Conection:
             query_update = """UPDATE {0}
                             SET {1} ,
                             FechaModificacionReg =  CAST('{3}' as DATETIME)
-                            WHERE {2};""".format(
+                            WHERE {2}""".format(
                 table, str_data, condicion, str(fecha_mod)
             )
         if columns == ["ActaPublicada", "FechaModificacion"]:
             query_update = """UPDATE {0}
                             SET {3} = CAST('{1}' as INT) , {4} = '{2}'
                             FechaModificacionReg = CAST('{6}' as DATETIME)
-                            WHERE {5};""".format(
+                            WHERE {5}""".format(
                 table,
                 str(values[0]),
                 str(values[1]),
@@ -394,6 +395,13 @@ class Conection:
                 str(columns[1]),
                 condicion,
                 str(fecha_mod)
+            )
+        if columns == "Url_visitada":
+            query_update = """UPDATE {0} 
+                            SET {2} = CAST('{1}' as INT) , 
+                            FechaModificacionReg = CAST('{4}' as DATETIME)    
+                            WHERE {3}""".format(
+                str(table), str(values), str(columns), condicion, str(fecha_mod)
             )
         self.__connect()
         cursor = self.cnn.cursor()
@@ -409,7 +417,22 @@ class Conection:
         query_licitacion = """SELECT {0}
                               FROM [DWH_ANALYTICS].[dbo].[Licitacion]
                               WHERE ActaPublicada=1 
-                              and UrlActaDL in ('');""".format(
+                              and UrlActaDL in ('')""".format(
+            str_fields
+        )
+        self.__connect()
+        cursor = self.cnn.cursor()
+        cursor.execute(query_licitacion)
+        results = pd.DataFrame(cursor.fetchall(), columns=fields)
+        self.__disconect()
+        return results
+
+    def buscarDescargasPendientes(self, fields: list):
+        str_fields = ",".join([str(x) for x in fields])
+        query_licitacion = """SELECT {0}
+                              FROM [DWH_ANALYTICS].[dbo].[Licitacion]
+                              WHERE ActaPublicada=0 
+                              and Url_visitada = 0""".format(
             str_fields
         )
         self.__connect()
@@ -449,5 +472,6 @@ class Conection:
         self.__connect()
         cursor = self.cnn.cursor()
         cursor.execute(query)
+        self.cnn.commit()
         self.__disconect()
         return True

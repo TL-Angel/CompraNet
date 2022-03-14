@@ -29,10 +29,9 @@ def app(n_days=1):
     month = str(today.month)
     expedientes = DownloadExpedientes(None)
     expedientes.tmp_data = r"../data/tmp/"
-    # list_expedientes = expedientes.get_expedientes_publicados(
-    #     URL_EXPEDIENTES, current_year
-    # )
-    list_expedientes = ["../data/tmp/ExpedientesPublicados2022_2203090914.xlsx"]
+    list_expedientes = expedientes.get_expedientes_publicados(
+        URL_EXPEDIENTES, current_year
+    )
     for excel in list_expedientes:
         actas = {
             "actas_filtradas": [],
@@ -62,6 +61,7 @@ def app(n_days=1):
         expedientes_anuales.mapear_id_estados()
         expedientes_anuales.data_frame_filtered = expedientes_anuales.data_frame_filtered.fillna('')
         expedientes_anuales.data_frame_filtered.to_excel('../data/tmp/data_filtrada_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        expedientes_anuales.data_frame_filtered = expedientes_anuales.data_frame_filtered
         print('DF filtradas:  ',len(expedientes_anuales.data_frame_filtered))
         # Las de abajo deben de ser las licitaciones filtradas - las licitaciones de la db
         expedientes_anuales.new_licitaciones, expedientes_anuales.uploaded_db_licitaciones = filter_new_licitaciones(
@@ -77,9 +77,6 @@ def app(n_days=1):
         expedientes_anuales.uploaded_downloaded.to_excel('../data/tmp/lici_uploaded_db_yes_downloaded_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
         print("Uploaded no downloaded: ", len(expedientes_anuales.uploaded_no_downloaded))
         print("Uploaded yes downloaded: ", len(expedientes_anuales.uploaded_downloaded))
-        # Ahora pregunto que las licitaciones filtradas cuales ya están en DL
-        #expedientes_anuales.licitaciones_no_dl = filter_licitaciones_no_dl(expedientes_anuales.data_frame_filtered , expedientes_anuales.fecha, expedientes_anuales.data_frame_filtered.columns.tolist())
-        #expedientes_anuales.licitaciones_no_dl.to_excel('../data/tmp/lici_NO_DL_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
         #---------------------------
         # Mandar new licitaciones a DB Licitaciones
         #---------------------------

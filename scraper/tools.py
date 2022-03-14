@@ -102,6 +102,7 @@ class ExpedientesPublicados(object):
         self.data_frame_filtered = self.mapping_names_dwh(
             self.data_frame_filtered, MAPEO_DF_DWH
         )
+        self.data_frame_filtered['DescAnuncio'] = self.data_frame_filtered['DescAnuncio'].apply(str).apply(lambda x: x.replace("'", ""))
         self.data_frame_filtered["ActaPublicada"] = 0
         self.data_frame_filtered["UrlActaDL"] = ""
         self.data_frame_filtered["NombreArchivoActa"] = ""
@@ -359,7 +360,7 @@ class DownloadExpedientes(object):
         if len(links) == 3:
             print("contador: {0}, item: {1}".format(contador, links[1]))
             # downloadFile = smartproxy(url_base + links[1], session)
-            downloadFile = session.get(url_base + links[1])
+            downloadFile = session.get(url_base + links[1], proxies=proxy())
             if downloadFile.status_code == 200:
                 print(":::  obteniendo Acta  .......................................")
                 ext_split = downloadFile.headers["Content-Disposition"].split(".")
@@ -535,7 +536,7 @@ class DownloadExpedientes(object):
                 oppId
             )
             try:
-                response = session.get(url_)
+                response = session.get(url_, proxies=proxy())
                 # response = smartproxy(url_, session)
                 print("response: ", response.status_code)
                 if response.status_code == 200:
@@ -577,6 +578,13 @@ class DownloadExpedientes(object):
                         )
                         self.write_logfile(fileName, result_log)
                         print(result_log)
+                        # Actualizar url_visitada
+                        update_actas(
+                            values=1,
+                            columns="Url_visitada",
+                            table="DWH_ANALYTICS.dbo.Licitacion",
+                            condicion=[expId, oppId]
+                            )
                         self.child.reporte_actas["actas_no_descargadas"].append(
                             fileName
                         )
@@ -584,6 +592,7 @@ class DownloadExpedientes(object):
                     result_log = "Acta no descargada. Status_code: {}".format(
                         response.status_code
                     )
+                    # Pendientes_descargar
                     self.write_logfile(fileName, result_log)
                     print(result_log)
                     self.child.reporte_actas["actas_no_descargadas"].append(fileName)
@@ -591,6 +600,7 @@ class DownloadExpedientes(object):
                 result_log = "No se descargo acta. Error: {}".format(e)
                 self.write_logfile(fileName, result_log)
                 print(result_log)
+                # Pendientes_descargar
                 self.child.reporte_actas["actas_no_descargadas"].append(fileName)
             finally:
                 session.close()
@@ -612,7 +622,7 @@ class DownloadExpedientes(object):
         for year in years:
             with HTMLSession() as session:
                 # Obtenemos la pagina de descargas de contratos y expedientes
-                response = session.get(URL_EXPEDIENTES)
+                response = session.get(URL_EXPEDIENTES) #, proxies=proxy())
                 # response = smartproxy(URL_EXPEDIENTES, session, sticky=False)
                 # Validamos la respuesta del servidor
                 if response.status_code == 200:
@@ -626,7 +636,7 @@ class DownloadExpedientes(object):
                     print(url_file)
                     if len(url_file) >= 1:
                         print("downloading,....")
-                        res = session.get(url_file[0])
+                        res = session.get(url_file[0]) #, proxies=proxy())
                         # res = smartproxy(url_file[0], session, sticky=False)
                         if res.status_code == 200:
                             result_log = (
