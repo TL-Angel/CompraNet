@@ -10,15 +10,11 @@ __version__ = "1.0"
 __email__ = "atellezl@outlook.com"
 __status__ = "Development"
 
-from copy import deepcopy
 import sys
-
 sys.path.append("../")
-import re
 import json
 from datetime import datetime as dt
 import pandas as pd
-from difflib import SequenceMatcher as SM
 import pymssql
 
 #############################################
@@ -122,15 +118,14 @@ class Conection:
                     if self.SecurityIntegrated.lower() == "no":
                         self.cnn = pymssql.connect(
                             self.Server, self.UID, self.PWD, self.Database
-                        )  # , port=self.Db_Port)
+                        ) 
 
                     else:
                         self.cnn = pymssql.connect(
                             self.Server, self.UID, self.PWD, self.Database
-                        )  # , port=self.Db_Port )
+                        )  
 
                 except pymssql.Error as e:
-                    # self.Msg="Err Number : {0}, Err description: {1}".format(e.args[0],e.args[1])
                     self.Msg = " Err description: {0}".format(e)
                     self.cnn = None
                     return False
@@ -155,11 +150,6 @@ class Conection:
         if self.cnn != None:
             self.cnn.close()
 
-    # def __closeFileExcel(self):
-    #    if (self.workbook != None):
-    #        self.workbook.close()
-    #        self.workbook = None
-
     def test_conection(self):
         if self.__connect():
             self.Msg = "Successful connection."
@@ -175,7 +165,6 @@ class Conection:
         self.Script = "select top 3000 * from DWH_Analytics.dbo.CNet_Opportunities with(nolock) WHERE añomes={0} and FechaUltimaConsulta is null ".format(
             AñoMes
         )
-        # self.Script='Select top 3000 * from DWH_Analytics.dbo.CNet_Opportunities with(nolock) WHERE añomes={0} and FechaUltimaConsulta is null'.format(AñoMes)
         if self.Script != "":
 
             if self.__connect():
@@ -216,11 +205,6 @@ class Conection:
                         oppID, actaID, NameFile, ext, url
                     )
                 )
-                # row = cursor.fetchone()
-                # print('OpportunityId: '.format(row[0]))
-                # while row:
-                #    print ("Inserted Product ID : ") +str(row[0])
-                #    row = cursor.fetchone()
                 self.cnn.commit()
 
             except pymssql.DatabaseError as e:
@@ -312,12 +296,10 @@ class Conection:
         """Método para insertar datos a la base de datos usando pymssql."""
         if len(FieldList) >= 1:
             cols = ",".join([str(i) for i in FieldList])
-            # params = ",".join(['?' for i in FieldList])
             params = ",".join(TIPOS_DWH)
             values = [tuple(x) for x in DF_Data.values.tolist()]
         else:
             cols = ",".join([str(i) for i in DF_Data.columns.tolist()])
-            # params = ",".join(['?' for i in DF_Data.columns.tolist()])
             params = ",".join(TIPOS_DWH)
             values = [tuple(x) for x in DF_Data.values.tolist()]
 

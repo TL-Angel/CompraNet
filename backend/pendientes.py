@@ -1,9 +1,8 @@
 import sys
 sys.path.append("../")
-from scraper.DBServer import *
+from connections.DBServer import *
 from scraper.aux_compranet import *
 from scraper.tools import *
-import pandas as pd
 import time
 ##############################
 # CONFIG
@@ -22,11 +21,8 @@ def buscar_actas_pendientes():
     sql = Conection('DWH')
     data = sql.buscarActasPendientes(fields)
     data['OpportunityId'] = data['OpportunityId'].apply(int).apply(str)
-    #print(data)
     data, opportunityId, Codigo = buscar_pendientes_locales(data)
-    #print(data)
     names, dates, blob_names = preparar_paths(data)
-    #print("\nnames:\n", blob_names)
     #---subir al DL
     for name, date, blob_name, oppId, expId  in zip(names, dates, blob_names, opportunityId, Codigo):
         year, month = date[0], date[1].zfill(2)
@@ -44,7 +40,6 @@ def buscar_actas_pendientes():
             print(res)
         except Exception as e:
             print(e)
-            #Aqui imprimir un log del backend
         print(time.time() - start)
 
 def descargas_pendientes():
@@ -53,9 +48,7 @@ def descargas_pendientes():
     """
     actas = {
             "actas_filtradas": [],
-            "actas_nuevas_mongo_licitaciones_publicas": [],
-            "actas_nuevas_mongo_licitantes": [],
-            "actas_nuevas_mongo_licitantes_y_no_licitaciones_publicas": [],
+            "actas_nuevas_licitaciones_publicas": [],
             "total_actas_a_descargar": [],
             "actas_no_subidas_al_dl": [],
             "actas_no_descargadas": [],

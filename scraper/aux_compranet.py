@@ -1,11 +1,8 @@
 import sys
-# from tkinter import *
 sys.path.append("../")
-from scraper.DBServer import *
-# from scraper.tools import *
+from connections.DBServer import *
 from src.utils import *
 from connections.datalakeconn import *
-from connections.mongoconn import MongoConn
 import uuid
 from pathlib import Path
 import os
@@ -17,7 +14,6 @@ from pymongo import ReplaceOne
 from copy import deepcopy
 import pandas as pd
 import pymssql
-import json
 from datetime import timedelta, datetime as dt
 from glob import glob
 
@@ -28,6 +24,7 @@ folder_bucket = "Actas_Junta_Aclaraciones/"
 LOCAL_FOLDER = "../data/tmp/data/"
 BLOB_FOLDER = "Acta_Junta_Aclaraciones"
 TIMEOUT = 90
+CHUNKSIZE = 2097152 # 1024 * 1024 B * 2 = 2 MB
 ########################################
 
 
@@ -48,8 +45,8 @@ def upload_file_to_dl(blobname, folder, file_name, year, month):
     bucket = storage_client.bucket(BUCKET)
     blob = bucket.blob(blob_name)
     ## For slow upload speed
-    storage.blob._DEFAULT_CHUNKSIZE = 2097152 # 1024 * 1024 B * 2 = 2 MB
-    storage.blob._MAX_MULTIPART_SIZE = 2097152 # 2 MB
+    storage.blob._DEFAULT_CHUNKSIZE = CHUNKSIZE
+    storage.blob._MAX_MULTIPART_SIZE = CHUNKSIZE
     print("subiendo al dl ...")
     blob.upload_from_filename(full_name, content_type="application/pdf", timeout=TIMEOUT)
     response = busqueda_archivo_dl(BUCKET, blob_name)
@@ -81,8 +78,6 @@ def busqueda_archivo_dl(BUCKET, FULL_NAME):
         return False
 
 
-# ------------------------
-# Reading txt for mongo
 def read_mongo(auth_location):
     """Funcion para leer el json y conectar al datalake
 
@@ -95,10 +90,6 @@ def read_mongo(auth_location):
     with open(auth_location) as f:
         uri = f.read()[:-1]
     return uri
-
-
-# ---------------------------
-
 
 def gen_tmp_pdf(pdf_bytes):
     """Genera un PDF temporal ya que por alguna razón literata me pide enviarle
@@ -127,13 +118,11 @@ def literata_transcript(pdf_):
             resp_post = requests.post(upload_url, files=files)
             txt_file = BeautifulSoup(resp_post.content, "html.parser").find("a").text
             url_txt = f"http://192.168.150.158:11733/uploads/{txt_file}"
-            # return requests.get(url_txt).content.decode('utf-8')
             break
         except:
             url_txt = f"http://192.168.150.158:11733/uploads/{txt_file}"
             print("No procesada a literata")
             return "No procesada a literata"
-    # if isinstance(pdf_, bytes): Path(pdf_path).unlink()
     return requests.get(url_txt).content.decode("utf-8")
 
 
@@ -187,51 +176,6 @@ def upload_txt_to_dl(
     DL = Datalake(bucket)
     blobname = f"{folder_bucket}/{filename}.txt"
     return DL.upload_bytes(txt_bytes, blobname, content_type="text/plain")
-
-
-def upload_docs_to_mongo(
-    input_docs, data_base="api_extractor_licitantes", collection="extracciones"
-):
-    """Sube los documentos Mongo."""
-    docs = deepcopy(input_docs)
-    extra_data_compranet_xpath = {
-        "credito_externo": "//tr[.//td[contains(text(), 'Crédito externo')]]//td[position()=4]",
-        "fecha_acto_fallo": "//tr[.//td[contains(text(), 'Fecha del acto de fallo')]]//td[position()=4]",
-        "fecha_junta_aclaracion": "//tr[.//td[contains(text(), 'Fecha junta de aclaraciones')]]//td[position()=4]",
-        "procedimiento_exclusivo_pymes": "//tr[.//td[contains(text(), 'Procedimiento exclusivo para MIPYMES')]]//td[position()=4]",
-        "fecha_junta_revision_proyecto": "//tr[.//td[contains(text(), 'Fecha de la junta de revisión de proyecto')]]//td[position()=4]",
-    }
-    try:
-        conn = MongoConn("../auth/mongo_robina.json")
-        col = conn[data_base][collection]
-        bulk_updates = []
-        for doc in docs:
-            today = dt.today() - timedelta(days=0, hours=6, minutes=0)
-            doc["uuid"] = doc["filename"].split(".")[0]
-            split_ = doc["uuid"].split("_")
-            doc["opportunity"] = split_[0]
-            for idx, value in get_extra_data(
-                split_[0], extra_data_compranet_xpath
-            ).items():
-                try:
-                    doc[idx] = value
-                except Exception as e:
-                    print("{} no encontrado".format(str(idx)))
-                    pass
-            doc["expediente"] = split_[1]
-            doc["year"] = split_[2][:4]
-            doc["month"] = split_[2][4:]
-            doc["count"] = split_[3]
-            doc["fecha_carga"] = today.replace(microsecond=0)
-            filter_ = {"uuid": doc["uuid"]}
-            update_ = ReplaceOne(filter_, doc, upsert=True)
-            bulk_updates.append(update_)
-        bulk_result = col.bulk_write(bulk_updates)
-        return True
-    except Exception as e:
-        print(e)
-        return False
-
 
 def get_licitantes_mongodb(fecha):
     """Función para obtener los nombres de los licitantes obtenidos por literata más la información de su respectiva licitación
@@ -322,7 +266,6 @@ def upload_docs_to_mongo_info_licitantes(input_docs):
         col = mdb.collection
         bulk_updates = []
         for doc in docs:
-            # doc['nombre_licitante'] = doc['Codigo del expediente']+ "_" + doc['opportunityId']
             filter_ = {"nombre_licitante": doc["nombre_licitante"]}
             update_ = ReplaceOne(filter_, doc, upsert=True)
             bulk_updates.append(update_)
@@ -522,7 +465,7 @@ def get_dwh_info(data_frame, name: str = "text"):
                 [d2_temp.drop(columns=["lead_", "cuenta_"]), cuenta],
                 axis=1,
                 join="outer",
-            )  # .reset_index(drop=True)
+            )
         else:
             cuentas = (
                 d2_temp.groupby(columnas)
@@ -586,9 +529,6 @@ def write_logfile(fileName, result_log):
 
 
 def write_report_actas(fileName):
-    # with open('../data/tmp/reporte_actas.json', 'w') as file:
-    #    file.write(json.dumps(json.JSONEncoder().encode(fileName)))
-    # file.close()
     pd.DataFrame(fileName).to_csv("../data/tmp/reporte_actas.csv")
 
 def write_txt(fileName, content):
@@ -840,38 +780,8 @@ def filtrar_uploaded_downloaded(df, query):
             == False
         )
     ]
+
 def update_data_from_db(data):
-    """Método para actualizar los datos de las licitacions que ya se tenian previamente en DB,
-    pero que tienen cambios en, al menos, la fecha de última actualización. Para 
-    ello se actualizara
-
-    Args:
-        data (aby): Dataframe con las licitaciones que han cambiado en su fecha de última actualización
-                    y que ya se tenía previamente en DB.
-    """
-    columns = data.columns.tolist()
-    col_blocked = ["Codigo", "OpportunityId",
-                  'URLAnuncio', 'ActaPublicada', 'UrlActaDL', 
-                   'NombreArchivoActa', 'FechaCreacionReg']
-    col_condicion = ["Codigo", "OpportunityId"]
-    for x in col_blocked: columns.remove(x)
-    dat = data[columns]
-    dat = ",".join([str(col)+"=("+",".join([str(x) for x in dat[col].tolist()])+")" for col in columns])
-    data = data[col_condicion]
-    condicion = " AND ".join([str(col)+" IN ("+",".join([str(x) for x in data[col].tolist()])+")" for col in col_condicion])
-    table = "[DWH_ANALYTICS].[dbo].[Licitacion]"
-    fecha_mod =str(dt.today().replace(microsecond=0))
-    query_update = """UPDATE {0}
-                    SET {1} ,
-                    FechaModificacionReg =  CAST('{3}' as DATETIME)
-                    WHERE {2};""".format(
-        table, dat, condicion, str(fecha_mod)
-    )
-    sql = Conection("DWH")
-    query = sql.updateQuery(query_update)
-    return query
-
-def update_data_from_db2(data):
     """Método para actualizar los datos de las licitacions que ya se tenian previamente en DB,
     pero que tienen cambios en, al menos, la fecha de última actualización. Para 
     ello se actualizara
@@ -941,7 +851,11 @@ def update_data_from_db2(data):
         print(query_update)
         query = sql.updateQuery(query_update)
     return query
-
+def insertar_datos_nuevos(data, FieldList=[]):
+    """Métido para insertar datos nuevos a la base de datos
+    """
+    sql = Conection('DWH')
+    sql.InsertData(data, TableName='Licitacion',FieldList=FieldList )
 if __name__ == "__main__":
     upload_txt_to_dl("hola", "prueba")
     DL = Datalake(BUCKET)

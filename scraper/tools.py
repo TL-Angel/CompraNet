@@ -1,26 +1,18 @@
 import sys
-
 sys.path.append("../")
 from scraper.aux_compranet import *
-from scraper.DBServer import *
+from connections.DBServer import *
 from connections.datalakeconn import *
 from src.utils import *
 from requests_html import HTMLSession
 import re
-from datetime import date, timedelta, datetime as dt
+from datetime import timedelta, datetime as dt
 from zipfile import ZipFile
 from io import BytesIO
-import os
 import pandas as pd
-import numpy as np
-import json
 import random
 import time
-import bson
-import base64
-from bson.binary import Binary
 import requests
-import pymongo
 from pymongo import MongoClient
 from copy import deepcopy
 from pymongo import ReplaceOne
@@ -29,6 +21,8 @@ from pymongo import ReplaceOne
 #############################################
 # CONGIF ZONE
 #############################################
+TMP_EXPEDIENTES = r"../data/tmp/"
+TMP_ACTAS = r"../data/tmp/data"
 LOG_PENDIENTES = "../data/logs/logs_actas_pendientes.txt"
 XPATH_ACTA_PROPOSICIONES = (
     '//tr[.//td[contains(text(),"Acta de presentac")]]//a/@onclick'
@@ -63,8 +57,6 @@ MAPEO_DF_DWH = {
 # Clases para el proceso
 #############################################
 
-# ----------------
-
 
 class ExpedientesPublicados(object):
     """
@@ -93,6 +85,7 @@ class ExpedientesPublicados(object):
         self.data_frame["Fecha de última modificacion"] = self.data_frame[
             "Fecha de última modificacion"
         ].apply(dt.strptime, args=("%Y/%m/%d %H:%M",))
+        print('Lectura de Expedientes ok')
 
     def prepare_data(self):
         self.data_frame_filtered.columns = [
@@ -151,7 +144,6 @@ class ExpedientesPublicados(object):
                         )
                     )
                 except Exception as e:
-                    # print(e)
                     df.loc[:, x] = df.loc[:, x].apply(str)
                     df.loc[:, x] = df.loc[:, x].apply(
                         string_time, args=("%Y/%m/%d %H:%M:%S",)
@@ -161,12 +153,6 @@ class ExpedientesPublicados(object):
                             microsecond=0,
                         )
                     )
-                # else:
-                #    df.loc[:,x] = df.loc[:,x].apply(str)
-                #    df.loc[:,x] = df.loc[:,x].apply(string_time, args=('%Y-%m-%d %H:%M:%S.%f',))
-                #    df.loc[:,x] = df.loc[:,x].apply(lambda x: x.replace(microsecond=0,))
-            # else:
-            #    df.loc[:, x] = df.loc[:, x].apply(str)
 
             if ("Vigencia" in str(x)) or ("Publicacion" in str(x)):
                 try:
@@ -180,7 +166,6 @@ class ExpedientesPublicados(object):
                         )
                     )
                 except Exception as e:
-                    # print(e)
                     df.loc[:, x] = df.loc[:, x].apply(str)
                     df.loc[:, x] = df.loc[:, x].apply(
                         string_time, args=("%Y-%m-%d %H:%M",)
@@ -264,7 +249,7 @@ class DownloadExpedientes(object):
         self.month = month
         self.url_expedientes = url_expedientes
         self.path_datalake_folder = path_datalake_folder
-        self.tmp_data = r"../data/tmp/data"
+        self.tmp_data = TMP_ACTAS
         self.blob_name = "Actas_Junta_Aclaraciones"
 
     def download_data_expediente_publicados(self, year, month):
@@ -280,7 +265,6 @@ class DownloadExpedientes(object):
         """
         self.year = year
         self.month = month
-        # FILTRAR POR AÑO Y MES PARA LUEGO DESCARGAR LAS ACTAS
         salida = []
         try:
             if (len(self.child.uploaded_no_downloaded) == 0) & (
@@ -359,7 +343,6 @@ class DownloadExpedientes(object):
     ):
         if len(links) == 3:
             print("contador: {0}, item: {1}".format(contador, links[1]))
-            # downloadFile = smartproxy(url_base + links[1], session)
             downloadFile = session.get(url_base + links[1], proxies=proxy())
             if downloadFile.status_code == 200:
                 print(":::  obteniendo Acta  .......................................")
@@ -438,31 +421,6 @@ class DownloadExpedientes(object):
                     self.write_logfile(file_name, result_log + e, LOG_PENDIENTES)
                     print(e)
                     self.child.reporte_actas["actas_no_subidas_al_dl"].append(file_name)
-                #############################################################
-                # COMIENZA PROCESO PARA ENVIAR A LITERATA
-                #############################################################
-                # enviado = self.send_file(fileName, str(contador), ext)
-                # if enviado.status_code == 200:
-                #     print("Acta procesada en literata: ok")
-                #     result_log = "Acta Procesada en Literata: ok. Respuesta server literarta: {}".format(
-                #         enviado.status_code
-                #     )
-                #     self.write_logfile(file_name, result_log)
-                #     self.child.reporte_actas["actas_procesadas_literata"].append(
-                #         file_name
-                #     )
-                #     return enviado
-                # else:
-                #     print("Status code: {}".format(enviado))
-                #     result_log = "No se pudo insertar registro a la db. Respuesta server literarta: {}".format(
-                #         enviado.status_code
-                #     )
-                #     self.write_logfile(file_name, result_log)
-                #     self.child.reporte_actas["actas_no_procesadas_literata"].append(
-                #         file_name
-                #     )
-                #     return None
-                ###############################################################################
             else:
                 self.child.reporte_actas["actas_no_descargadas"].append(fileName)
 
@@ -537,7 +495,6 @@ class DownloadExpedientes(object):
             )
             try:
                 response = session.get(url_, proxies=proxy())
-                # response = smartproxy(url_, session)
                 print("response: ", response.status_code)
                 if response.status_code == 200:
                     print(
@@ -617,13 +574,12 @@ class DownloadExpedientes(object):
         """
         year_1 = str(int(current_year) - 1)
         year_2 = str(int(current_year) - 2)
-        years = [current_year]  # , year_1, year_2]
+        years = [current_year]
         list_path = []
         for year in years:
             with HTMLSession() as session:
                 # Obtenemos la pagina de descargas de contratos y expedientes
-                response = session.get(URL_EXPEDIENTES) #, proxies=proxy())
-                # response = smartproxy(URL_EXPEDIENTES, session, sticky=False)
+                response = session.get(URL_EXPEDIENTES)
                 # Validamos la respuesta del servidor
                 if response.status_code == 200:
                     msgError = "Conexión existosa.!"
@@ -636,8 +592,7 @@ class DownloadExpedientes(object):
                     print(url_file)
                     if len(url_file) >= 1:
                         print("downloading,....")
-                        res = session.get(url_file[0]) #, proxies=proxy())
-                        # res = smartproxy(url_file[0], session, sticky=False)
+                        res = session.get(url_file[0]) 
                         if res.status_code == 200:
                             result_log = (
                                 "Url expediente encontrado. Status code: {}.".format(
@@ -728,10 +683,6 @@ class MongoConnection(object):
                             microsecond=0,
                         )
                     )
-                # else:
-                #    df.loc[:,x] = df.loc[:,x].apply(str)
-                #    df.loc[:,x] = df.loc[:,x].apply(string_time, args=('%Y-%m-%d %H:%M:%S.%f',))
-                #    df.loc[:,x] = df.loc[:,x].apply(lambda x: x.replace(microsecond=0,))
             else:
                 df.loc[:, x] = df.loc[:, x].apply(str)
         return df
@@ -774,7 +725,7 @@ class MongoConnection(object):
             )
         )
         self.write_logfile("licitaciones nuevas mongo", result_log)
-        self.child.reporte_actas["actas_nuevas_mongo_licitaciones_publicas"].append(
+        self.child.reporte_actas["actas_nuevas_licitaciones_publicas"].append(
             len(self.child.new_licitaciones)
         )
         # pregunto si las docs existen en la base de mongo
@@ -786,11 +737,6 @@ class MongoConnection(object):
             # creando query para insertar
             news = self.child.new_licitaciones
             news.loc[:, "fecha_de_carga"] = dt.today().replace(microsecond=0)
-            # enviando la data a la base de datos de licitaciones_publicas
-            # data_base = "compranet"
-            # collection = "licitaciones_publicas"
-            # self.start_connection(data_base, collection)
-            # self.send_data_mongo(self.create_query_bulk_mongo(news))
             # Cuantos de estos archivos han sido transformados por literata
             data_base = "compranet"
             collection = "licitantes"
@@ -851,11 +797,6 @@ class MongoConnection(object):
             self.child.new_licitantes.loc[:, "fecha_de_carga"] = dt.today().replace(
                 microsecond=0
             )
-            # actualizando la data a la base de datos de licitaciones_publicas
-            # data_base = "compranet"
-            # collection = "licitaciones_publicas"
-            # self.start_connection(data_base, collection)
-            # self.send_data_mongo(self.create_query_bulk_mongo(self.child.new_licitantes))
 
     def send_data_mongo(self, chunk):
         """Enviar los datos filtrados a la base de datos en un server mongo"""
@@ -1185,7 +1126,6 @@ def delete_sa_cv(ent):
         " C[\. ]*V[ \.]*",
         " R[\. ]*L[ \.]*",
         " C[ \.]*S[ \.]*",
-        #' S[ \.]*A[ \.]*',
         " S[ \.]*A[ \.]*P[ \.]*I[ \.]*",
         " S[ \.]*A[ \.]*A[\.]*",
         " S[ \.]*A[ \.]*C[\.]*",
