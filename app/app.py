@@ -83,7 +83,7 @@ def app(n_days=1):
         actas["actas_uploaded_no_downloaded"] = str(len(expedientes_anuales.uploaded_no_downloaded))
         print("Uploaded yes downloaded: ", len(expedientes_anuales.uploaded_downloaded))
         actas["actas_uploaded_yes_downloaded"] = str(len(expedientes_anuales.uploaded_downloaded))
-        # ---------------------------
+        #---------------------------
         # Mandar new licitaciones a DB Licitaciones
         # ---------------------------
         insertar_datos_nuevos(

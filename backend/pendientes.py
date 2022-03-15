@@ -119,13 +119,13 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt as e:
         print("Interrupted")
-        fileName = "pendientes_dl.py"
+        fileName = "pendientes.py"
         result_log = "KeyboardInterrupt error {}".format(e)
         write_logfile(fileName, result_log)
         try:
             sys.exit(0)
         except SystemExit as e:
-            fileName = "app.py"
+            fileName = "pendientes.py"
             result_log = "SystemExit error: {}".format(e)
             write_logfile(fileName, result_log)
             os._exit(0)

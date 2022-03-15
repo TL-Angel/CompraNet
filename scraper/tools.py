@@ -3,7 +3,6 @@ sys.path.append("../")
 from scraper.aux_compranet import *
 from connections.DBServer import *
 from connections.datalakeconn import *
-from src.utils import *
 from requests_html import HTMLSession
 import re
 from datetime import timedelta, datetime as dt
@@ -13,9 +12,7 @@ import pandas as pd
 import random
 import time
 import requests
-from pymongo import MongoClient
 from copy import deepcopy
-from pymongo import ReplaceOne
 
 
 #############################################

@@ -60,4 +60,3 @@ Sumado a lo anterior, también está incluido `aux_compranet.py` que es un modul
 
 ### src
 En src se encuentra el archivo `utils.py` que es modulo con funciones de utilidades generales que se utiliza en tools.py
-
