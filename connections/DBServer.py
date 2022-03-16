@@ -10,15 +10,11 @@ __version__ = "1.0"
 __email__ = "atellezl@outlook.com"
 __status__ = "Development"
 
-from copy import deepcopy
 import sys
-
 sys.path.append("../")
-import re
 import json
 from datetime import datetime as dt
 import pandas as pd
-from difflib import SequenceMatcher as SM
 import pymssql
 
 #############################################
@@ -122,15 +118,14 @@ class Conection:
                     if self.SecurityIntegrated.lower() == "no":
                         self.cnn = pymssql.connect(
                             self.Server, self.UID, self.PWD, self.Database
-                        )  # , port=self.Db_Port)
+                        ) 
 
                     else:
                         self.cnn = pymssql.connect(
                             self.Server, self.UID, self.PWD, self.Database
-                        )  # , port=self.Db_Port )
+                        )  
 
                 except pymssql.Error as e:
-                    # self.Msg="Err Number : {0}, Err description: {1}".format(e.args[0],e.args[1])
                     self.Msg = " Err description: {0}".format(e)
                     self.cnn = None
                     return False
@@ -155,11 +150,6 @@ class Conection:
         if self.cnn != None:
             self.cnn.close()
 
-    # def __closeFileExcel(self):
-    #    if (self.workbook != None):
-    #        self.workbook.close()
-    #        self.workbook = None
-
     def test_conection(self):
         if self.__connect():
             self.Msg = "Successful connection."
@@ -175,7 +165,6 @@ class Conection:
         self.Script = "select top 3000 * from DWH_Analytics.dbo.CNet_Opportunities with(nolock) WHERE añomes={0} and FechaUltimaConsulta is null ".format(
             AñoMes
         )
-        # self.Script='Select top 3000 * from DWH_Analytics.dbo.CNet_Opportunities with(nolock) WHERE añomes={0} and FechaUltimaConsulta is null'.format(AñoMes)
         if self.Script != "":
 
             if self.__connect():
@@ -216,11 +205,6 @@ class Conection:
                         oppID, actaID, NameFile, ext, url
                     )
                 )
-                # row = cursor.fetchone()
-                # print('OpportunityId: '.format(row[0]))
-                # while row:
-                #    print ("Inserted Product ID : ") +str(row[0])
-                #    row = cursor.fetchone()
                 self.cnn.commit()
 
             except pymssql.DatabaseError as e:
@@ -312,12 +296,10 @@ class Conection:
         """Método para insertar datos a la base de datos usando pymssql."""
         if len(FieldList) >= 1:
             cols = ",".join([str(i) for i in FieldList])
-            # params = ",".join(['?' for i in FieldList])
             params = ",".join(TIPOS_DWH)
             values = [tuple(x) for x in DF_Data.values.tolist()]
         else:
             cols = ",".join([str(i) for i in DF_Data.columns.tolist()])
-            # params = ",".join(['?' for i in DF_Data.columns.tolist()])
             params = ",".join(TIPOS_DWH)
             values = [tuple(x) for x in DF_Data.values.tolist()]
 
@@ -333,12 +315,12 @@ class Conection:
 
     def searchData(self, ls_codigo, ls_opid, fields=["Codigo", "OpportunityId"]):
         str_fields = ",".join([str(x) for x in fields])
-        str_codigo = ",".join([str(x) for x in ls_codigo])
-        str_opid = ",".join([str(x) for x in ls_opid])
+        str_codigo = ",".join(["'"+str(x)+"'" for x in ls_codigo])
+        str_opid = ",".join(["CAST("+str(x)+" as INT)" for x in ls_opid])
         query_licitacion = """SELECT {2}
                             FROM DWH_ANALYTICS.dbo.Licitacion 
                             WHERE Codigo IN ({0})
-                            AND OpportunityId IN ({1}); """.format(
+                            AND OpportunityId IN ({1})""".format(
             str_codigo, str_opid, str_fields
         )
         self.__connect()
@@ -352,7 +334,7 @@ class Conection:
         str_fields = ",".join([str(x) for x in fields])
         query_licitacion = """SELECT {0}
                             FROM DWH_ANALYTICS.dbo.Licitacion 
-                            WHERE FechaModificacion >= '{1}';""".format(
+                            WHERE FechaModificacion >= '{1}'""".format(
             str_fields, str(fecha)
         )
         self.__connect()
@@ -368,8 +350,9 @@ class Conection:
         if columns == "ActaPublicada":
             query_update = """UPDATE {0} 
                             SET {2} = CAST('{1}' as INT) , 
+                            Url_visitada = CAST('1' as INT),
                             FechaModificacionReg = CAST('{4}' as DATETIME)    
-                            WHERE {3};""".format(
+                            WHERE {3}""".format(
                 table, str(values), str(columns), condicion, str(fecha_mod)
             )
         if type(columns) == type([1]):
@@ -379,14 +362,14 @@ class Conection:
             query_update = """UPDATE {0}
                             SET {1} ,
                             FechaModificacionReg =  CAST('{3}' as DATETIME)
-                            WHERE {2};""".format(
+                            WHERE {2}""".format(
                 table, str_data, condicion, str(fecha_mod)
             )
         if columns == ["ActaPublicada", "FechaModificacion"]:
             query_update = """UPDATE {0}
                             SET {3} = CAST('{1}' as INT) , {4} = '{2}'
                             FechaModificacionReg = CAST('{6}' as DATETIME)
-                            WHERE {5};""".format(
+                            WHERE {5}""".format(
                 table,
                 str(values[0]),
                 str(values[1]),
@@ -394,6 +377,13 @@ class Conection:
                 str(columns[1]),
                 condicion,
                 str(fecha_mod)
+            )
+        if columns == "Url_visitada":
+            query_update = """UPDATE {0} 
+                            SET {2} = CAST('{1}' as INT) , 
+                            FechaModificacionReg = CAST('{4}' as DATETIME)    
+                            WHERE {3}""".format(
+                str(table), str(values), str(columns), condicion, str(fecha_mod)
             )
         self.__connect()
         cursor = self.cnn.cursor()
@@ -409,7 +399,22 @@ class Conection:
         query_licitacion = """SELECT {0}
                               FROM [DWH_ANALYTICS].[dbo].[Licitacion]
                               WHERE ActaPublicada=1 
-                              and UrlActaDL in ('');""".format(
+                              and UrlActaDL in ('')""".format(
+            str_fields
+        )
+        self.__connect()
+        cursor = self.cnn.cursor()
+        cursor.execute(query_licitacion)
+        results = pd.DataFrame(cursor.fetchall(), columns=fields)
+        self.__disconect()
+        return results
+
+    def buscarDescargasPendientes(self, fields: list):
+        str_fields = ",".join([str(x) for x in fields])
+        query_licitacion = """SELECT {0}
+                              FROM [DWH_ANALYTICS].[dbo].[Licitacion]
+                              WHERE ActaPublicada=0 
+                              and Url_visitada = 0""".format(
             str_fields
         )
         self.__connect()
@@ -449,5 +454,6 @@ class Conection:
         self.__connect()
         cursor = self.cnn.cursor()
         cursor.execute(query)
+        self.cnn.commit()
         self.__disconect()
         return True

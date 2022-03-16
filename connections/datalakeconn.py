@@ -38,17 +38,6 @@ class Datalake:
         """
         blob = self.bucket.blob(blob_name)
         blob.upload_from_filename(file_name)
-        # response = busqueda_archivo_dl(BUCKET, blob_name)
-        # if response:
-        #     self.verb = True
-        # if self.verb:
-        #     msg = f'archivo {file_name} subido a {self.bucket_name}/{blob_name}'
-        #     print(msg)
-        #     return True
-        # else:
-        #     msg = f'archivo {file_name} NO subido a Data Lake'
-        #     print(msg)
-        #     return False
 
     def upload_bytes(self, data_bytes: bytes, blob_name: str,
                      content_type: str='text/plain'):
@@ -74,37 +63,3 @@ class Datalake:
         blob = self.bucket.blob(blob_name)
         blob.download_to_filename(file_name)
         if self.verb: print(f'blob {blob_name} descargado en {file_name}')
-
-
-# def upload_to_datalake(file_name, blob_name, bucket_name=ROBINA_BUCK,
-#                        verbose=False):
-#         """
-#         """
-#         # import os
-#         # os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "./key_google_robina_edit.json"
-#         dl = Datalake(bucket_name, verbose=verbose)
-#         dl.upload(file_name, blob_name)
-#
-# def bytes_from_datalake(blob_name, bucket_name=ROBINA_BUCK, verbose=False):
-#         """
-#         """
-#         dl = Datalake(bucket_name, verbose=verbose)
-#         return dl.download_bytes(blob_name)
-
-
-if __name__ == '__main__':
-
-    pass
-
-    # Prueba de upload:
-    cons_buck = 'uniclick-dl-robina-prod'
-    dl = Datalake(cons_buck, verbose=True)
-
-    # file_name = '../data/delete_me.pdf'
-    blob_name = 'api_dictamenes/dictamenes/p.pdf'
-    # dl.upload_from_filename(file_name, blob_name)
-
-    dl.download_to_file(blob_name, './delete_meeeee.pdf')
-    # upload_to_datalake(file_name, blob_name)
-    #
-    # print(bytes_from_datalake(blob_name))

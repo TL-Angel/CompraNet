@@ -1,22 +1,18 @@
-
-from cmath import e
 import sys
 sys.path.append("../")
-from connections.datalakeconn import *
 from scraper.tools import *
 from scraper.aux_compranet import *
-from scraper.SQLServer import *
-from scraper.aux_compranet import write_logfile, write_report_actas
-from requests_html import HTMLSession
-import re
-from datetime import date, timedelta, datetime as dt
-from zipfile import ZipFile
-from io import BytesIO
+from datetime import timedelta, datetime as dt
 import os
-import pandas as pd
-import numpy as np
 import time
-from copy import deepcopy
+
+###################################
+# CONFIG
+###################################
+TMP_EXPEDIENTES = r"../data/tmp/"
+TMP_ACTAS = r"../data/tmp/data"
+INTENTOS = 3
+###################################
 
 
 def app(n_days=1):
@@ -26,19 +22,19 @@ def app(n_days=1):
     today = dt.today() - timedelta(days=0, hours=6, minutes=0)
     today = today.replace(hour=0, minute=0, second=0, microsecond=0)
     current_year = str(today.year)
-    month = str(today.month)
+    month = str(today.month).zfill(2)
     expedientes = DownloadExpedientes(None)
-    expedientes.tmp_data = r"../data/tmp/"
-    # list_expedientes = expedientes.get_expedientes_publicados(
-    #     URL_EXPEDIENTES, current_year
-    # )
-    list_expedientes = ["../data/tmp/ExpedientesPublicados2022_2203090914.xlsx"]
+    expedientes.tmp_data = TMP_EXPEDIENTES
+    list_expedientes = expedientes.get_expedientes_publicados(
+        URL_EXPEDIENTES, current_year
+    )
     for excel in list_expedientes:
         actas = {
             "actas_filtradas": [],
-            "actas_nuevas_mongo_licitaciones_publicas": [],
-            "actas_nuevas_mongo_licitantes": [],
-            "actas_nuevas_mongo_licitantes_y_no_licitaciones_publicas": [],
+            "actas_nuevas_licitaciones_publicas": [],
+            "actas_uploaded_db": '',
+            "actas_uploaded_no_downloaded": '',
+            "actas_uploaded_yes_downloaded": '',
             "total_actas_a_descargar": [],
             "actas_no_subidas_al_dl": [],
             "actas_no_descargadas": [],
@@ -49,7 +45,6 @@ def app(n_days=1):
         }
         print("Empezando proceso de extracción para {}".format(excel))
         expedientes_anuales = ExpedientesPublicados(path_file=excel)
-        print('lectura excel ok)')
         expedientes_anuales.reporte_actas = actas
         expedientes_anuales.reading_expedientes_publicados()
         expedientes_anuales.get_opportunity_id()
@@ -60,51 +55,66 @@ def app(n_days=1):
         expedientes_anuales.insertar_fecha_modificacion_reg()
         expedientes_anuales.preparacion_estados()
         expedientes_anuales.mapear_id_estados()
-        expedientes_anuales.data_frame_filtered = expedientes_anuales.data_frame_filtered.fillna('')
-        expedientes_anuales.data_frame_filtered.to_excel('../data/tmp/data_filtrada_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
-        print('DF filtradas:  ',len(expedientes_anuales.data_frame_filtered))
-        # Las de abajo deben de ser las licitaciones filtradas - las licitaciones de la db
-        expedientes_anuales.new_licitaciones, expedientes_anuales.uploaded_db_licitaciones = filter_new_licitaciones(
+        expedientes_anuales.data_frame_filtered = (
+            expedientes_anuales.data_frame_filtered.fillna("")
+        )
+        expedientes_anuales.data_frame_filtered = (
             expedientes_anuales.data_frame_filtered
-            )
-        expedientes_anuales.new_licitaciones.to_excel('../data/tmp/lici_news_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
-        expedientes_anuales.uploaded_db_licitaciones.to_excel('../data/tmp/lici_uploaded_db_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
-        print( 'New licitaciones:  ',len( expedientes_anuales.new_licitaciones))
-        print( 'uploaded db:  ',len( expedientes_anuales.uploaded_db_licitaciones))
-        expedientes_anuales.uploaded_no_downloaded = filtrar_uploaded_no_downloaded(expedientes_anuales.uploaded_db_licitaciones)
-        expedientes_anuales.uploaded_downloaded = filtrar_uploaded_downloaded(expedientes_anuales.uploaded_db_licitaciones, expedientes_anuales.uploaded_no_downloaded)
-        expedientes_anuales.uploaded_no_downloaded.to_excel('../data/tmp/lici_uploaded_db_no_downloaded_222_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
-        expedientes_anuales.uploaded_downloaded.to_excel('../data/tmp/lici_uploaded_db_yes_downloaded_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
-        print("Uploaded no downloaded: ", len(expedientes_anuales.uploaded_no_downloaded))
+        )
+        # Las de abajo deben de ser las licitaciones filtradas - las licitaciones de la db
+        (
+            expedientes_anuales.new_licitaciones,
+            expedientes_anuales.uploaded_db_licitaciones,
+        ) = filter_new_licitaciones(expedientes_anuales.data_frame_filtered)
+        expedientes_anuales.uploaded_no_downloaded = filtrar_uploaded_no_downloaded(
+            expedientes_anuales.uploaded_db_licitaciones
+        )
+        expedientes_anuales.uploaded_downloaded = filtrar_uploaded_downloaded(
+            expedientes_anuales.uploaded_db_licitaciones,
+            expedientes_anuales.uploaded_no_downloaded,
+        )
+        print("DF filtradas:  ", len(expedientes_anuales.data_frame_filtered))
+        print("New licitaciones:  ", len(expedientes_anuales.new_licitaciones))
+        print("uploaded db:  ", len(expedientes_anuales.uploaded_db_licitaciones))
+        actas['actas_uploaded_db'] = str(len(expedientes_anuales.uploaded_db_licitaciones))
+        print(
+            "Uploaded no downloaded: ", len(expedientes_anuales.uploaded_no_downloaded)
+        )
+        actas["actas_uploaded_no_downloaded"] = str(len(expedientes_anuales.uploaded_no_downloaded))
         print("Uploaded yes downloaded: ", len(expedientes_anuales.uploaded_downloaded))
-        # Ahora pregunto que las licitaciones filtradas cuales ya están en DL
-        #expedientes_anuales.licitaciones_no_dl = filter_licitaciones_no_dl(expedientes_anuales.data_frame_filtered , expedientes_anuales.fecha, expedientes_anuales.data_frame_filtered.columns.tolist())
-        #expedientes_anuales.licitaciones_no_dl.to_excel('../data/tmp/lici_NO_DL_{}.xlsx'.format(str(dt.today().replace(microsecond=0)).replace(":", "-")))
+        actas["actas_uploaded_yes_downloaded"] = str(len(expedientes_anuales.uploaded_downloaded))
         #---------------------------
         # Mandar new licitaciones a DB Licitaciones
-        #---------------------------
-        sql = Conection('DWH')
-        sql.InsertData(expedientes_anuales.new_licitaciones, TableName='Licitacion', FieldList=expedientes_anuales.new_licitaciones.columns.tolist())
-        #--------------------------
+        # ---------------------------
+        insertar_datos_nuevos(
+            expedientes_anuales.new_licitaciones,
+            FieldList=expedientes_anuales.new_licitaciones.columns.tolist(),
+        )
+        # --------------------------
         # Actualizar archivos existentes en db con nuevos cambios
-        #--------------------------
-        update_data_from_db2(expedientes_anuales.uploaded_no_downloaded)
-        #---- Descargar actas -----------
+        # --------------------------
+        update_data_from_db(expedientes_anuales.uploaded_no_downloaded)
+        # ---- Descargar actas -----------
         downloaded = DownloadExpedientes(expedientes_anuales)
-        downloaded.tmp_data = r"../data/tmp/data"
+        downloaded.tmp_data = TMP_ACTAS
         downloaded.download_data_expediente_publicados(current_year, month)
         reporte_actas[
-            excel.replace("../data/tmp/", "")
+            excel.replace(TMP_EXPEDIENTES, "")
         ] = downloaded.child.reporte_actas
     write_report_actas(reporte_actas)
     print(time.time() - start)
 
 
 if __name__ == "__main__":
-    try: 
+    try:
         print(sys.argv)
         n_days = int(sys.argv[1])
-        app(n_days)
+        for i in range(INTENTOS):
+            try:
+                app(n_days)
+                break
+            except Exception as e:
+                print(e)
     except KeyboardInterrupt as e:
         print("Interrupted")
         fileName = "app.py"

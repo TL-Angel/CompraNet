@@ -1,40 +1,32 @@
 import sys
-
 sys.path.append("../")
 from scraper.aux_compranet import *
-from scraper.DBServer import *
+from connections.DBServer import *
 from connections.datalakeconn import *
-from src.utils import *
 from requests_html import HTMLSession
 import re
-from datetime import date, timedelta, datetime as dt
+from datetime import timedelta, datetime as dt
 from zipfile import ZipFile
 from io import BytesIO
-import os
 import pandas as pd
-import numpy as np
-import json
 import random
 import time
-import bson
-import base64
-from bson.binary import Binary
 import requests
-import pymongo
-from pymongo import MongoClient
 from copy import deepcopy
-from pymongo import ReplaceOne
 
 
 #############################################
 # CONGIF ZONE
 #############################################
+TMP_EXPEDIENTES = r"../data/tmp/"
+TMP_ACTAS = r"../data/tmp/data"
 LOG_PENDIENTES = "../data/logs/logs_actas_pendientes.txt"
 XPATH_ACTA_PROPOSICIONES = (
     '//tr[.//td[contains(text(),"Acta de presentac")]]//a/@onclick'
 )
 XPATH_ACTA_ACLARACIONES = '//tr[.//td[contains(text(),"Acta(s)")]]//a/@onclick'
 TIPO_ACTA = "proposiciones"
+BLOB_FOLDER = "Acta_Presentacion_Y_Proposiciones"
 MAPEO_DF_DWH = {
     "Codigo del expediente": "Codigo",
     "Numero del procedimiento": "NumProc",
@@ -62,8 +54,6 @@ MAPEO_DF_DWH = {
 #############################################
 # Clases para el proceso
 #############################################
-
-# ----------------
 
 
 class ExpedientesPublicados(object):
@@ -93,6 +83,7 @@ class ExpedientesPublicados(object):
         self.data_frame["Fecha de última modificacion"] = self.data_frame[
             "Fecha de última modificacion"
         ].apply(dt.strptime, args=("%Y/%m/%d %H:%M",))
+        print('Lectura de Expedientes ok')
 
     def prepare_data(self):
         self.data_frame_filtered.columns = [
@@ -102,6 +93,7 @@ class ExpedientesPublicados(object):
         self.data_frame_filtered = self.mapping_names_dwh(
             self.data_frame_filtered, MAPEO_DF_DWH
         )
+        self.data_frame_filtered['DescAnuncio'] = self.data_frame_filtered['DescAnuncio'].apply(str).apply(lambda x: x.replace("'", ""))
         self.data_frame_filtered["ActaPublicada"] = 0
         self.data_frame_filtered["UrlActaDL"] = ""
         self.data_frame_filtered["NombreArchivoActa"] = ""
@@ -150,7 +142,6 @@ class ExpedientesPublicados(object):
                         )
                     )
                 except Exception as e:
-                    # print(e)
                     df.loc[:, x] = df.loc[:, x].apply(str)
                     df.loc[:, x] = df.loc[:, x].apply(
                         string_time, args=("%Y/%m/%d %H:%M:%S",)
@@ -160,12 +151,6 @@ class ExpedientesPublicados(object):
                             microsecond=0,
                         )
                     )
-                # else:
-                #    df.loc[:,x] = df.loc[:,x].apply(str)
-                #    df.loc[:,x] = df.loc[:,x].apply(string_time, args=('%Y-%m-%d %H:%M:%S.%f',))
-                #    df.loc[:,x] = df.loc[:,x].apply(lambda x: x.replace(microsecond=0,))
-            # else:
-            #    df.loc[:, x] = df.loc[:, x].apply(str)
 
             if ("Vigencia" in str(x)) or ("Publicacion" in str(x)):
                 try:
@@ -179,7 +164,6 @@ class ExpedientesPublicados(object):
                         )
                     )
                 except Exception as e:
-                    # print(e)
                     df.loc[:, x] = df.loc[:, x].apply(str)
                     df.loc[:, x] = df.loc[:, x].apply(
                         string_time, args=("%Y-%m-%d %H:%M",)
@@ -263,8 +247,8 @@ class DownloadExpedientes(object):
         self.month = month
         self.url_expedientes = url_expedientes
         self.path_datalake_folder = path_datalake_folder
-        self.tmp_data = r"../data/tmp/data"
-        self.blob_name = "Actas_Junta_Aclaraciones"
+        self.tmp_data = TMP_ACTAS
+        self.blob_name = BLOB_FOLDER
 
     def download_data_expediente_publicados(self, year, month):
         """Método para gestionar la descarga de la lista de expedientes de la junta de actas
@@ -278,8 +262,7 @@ class DownloadExpedientes(object):
             str: Nombre del archivo descargado
         """
         self.year = year
-        self.month = month
-        # FILTRAR POR AÑO Y MES PARA LUEGO DESCARGAR LAS ACTAS
+        self.month = str(month).zfill(2)
         salida = []
         try:
             if (len(self.child.uploaded_no_downloaded) == 0) & (
@@ -358,8 +341,7 @@ class DownloadExpedientes(object):
     ):
         if len(links) == 3:
             print("contador: {0}, item: {1}".format(contador, links[1]))
-            # downloadFile = smartproxy(url_base + links[1], session)
-            downloadFile = session.get(url_base + links[1])
+            downloadFile = session.get(url_base + links[1], proxies=proxy())
             if downloadFile.status_code == 200:
                 print(":::  obteniendo Acta  .......................................")
                 ext_split = downloadFile.headers["Content-Disposition"].split(".")
@@ -394,7 +376,7 @@ class DownloadExpedientes(object):
                         str(self.tmp_data),
                         str(file_name),
                         str(self.year),
-                        str(self.month),
+                        str(self.month).zfill(2),
                     )
                     print("Archivo subido a data lake?? ", response)
                     if response:
@@ -405,7 +387,7 @@ class DownloadExpedientes(object):
                         )
                         # Actualizar UrlActaDL, NombreArchivoActa si el acta fue subida al DL
                         blob_name = (
-                            f"{self.blob_name}/{ self.year}/{self.month}/{file_name}"
+                            f"{self.blob_name}/{ self.year}/{str(self.month).zfill(2)}/{file_name}"
                         )
                         nombre_acta = str(file_name_noext)
                         res = update_actas_subidas_dl(
@@ -420,7 +402,7 @@ class DownloadExpedientes(object):
                         result_log = "Respuesta dl: {}".format(response)
                         self.write_logfile(file_name, result_log)
                         blob_name = (
-                            f"{self.blob_name}/{ self.year}/{self.month}/{file_name}"
+                            f"{self.blob_name}/{ self.year}/{str(self.month).zfill(2)}/{file_name}"
                         )
                         full_name = r"{0}/{1}".format(self.tmp_data, file_name)
                         self.write_logfile(
@@ -437,31 +419,6 @@ class DownloadExpedientes(object):
                     self.write_logfile(file_name, result_log + e, LOG_PENDIENTES)
                     print(e)
                     self.child.reporte_actas["actas_no_subidas_al_dl"].append(file_name)
-                #############################################################
-                # COMIENZA PROCESO PARA ENVIAR A LITERATA
-                #############################################################
-                # enviado = self.send_file(fileName, str(contador), ext)
-                # if enviado.status_code == 200:
-                #     print("Acta procesada en literata: ok")
-                #     result_log = "Acta Procesada en Literata: ok. Respuesta server literarta: {}".format(
-                #         enviado.status_code
-                #     )
-                #     self.write_logfile(file_name, result_log)
-                #     self.child.reporte_actas["actas_procesadas_literata"].append(
-                #         file_name
-                #     )
-                #     return enviado
-                # else:
-                #     print("Status code: {}".format(enviado))
-                #     result_log = "No se pudo insertar registro a la db. Respuesta server literarta: {}".format(
-                #         enviado.status_code
-                #     )
-                #     self.write_logfile(file_name, result_log)
-                #     self.child.reporte_actas["actas_no_procesadas_literata"].append(
-                #         file_name
-                #     )
-                #     return None
-                ###############################################################################
             else:
                 self.child.reporte_actas["actas_no_descargadas"].append(fileName)
 
@@ -527,7 +484,7 @@ class DownloadExpedientes(object):
         Returns:
             object: Respuesta de la descarga de cada archivo.
         """
-        yearmonth = self.year + self.month
+        yearmonth = self.year + str(self.month).zfill(2)
         fileName = "{0}_{1}_{2}_{3}".format(TIPO_ACTA, oppId, expId, yearmonth)
         with HTMLSession() as session:
             url_base = "https://compranet.hacienda.gob.mx"
@@ -535,8 +492,7 @@ class DownloadExpedientes(object):
                 oppId
             )
             try:
-                response = session.get(url_)
-                # response = smartproxy(url_, session)
+                response = session.get(url_, proxies=proxy())
                 print("response: ", response.status_code)
                 if response.status_code == 200:
                     print(
@@ -577,6 +533,12 @@ class DownloadExpedientes(object):
                         )
                         self.write_logfile(fileName, result_log)
                         print(result_log)
+                        update_actas(
+                            values=1,
+                            columns="Url_visitada",
+                            table="DWH_ANALYTICS.dbo.Licitacion",
+                            condicion=[expId, oppId]
+                            )
                         self.child.reporte_actas["actas_no_descargadas"].append(
                             fileName
                         )
@@ -584,6 +546,7 @@ class DownloadExpedientes(object):
                     result_log = "Acta no descargada. Status_code: {}".format(
                         response.status_code
                     )
+                    # Pendientes_descargar
                     self.write_logfile(fileName, result_log)
                     print(result_log)
                     self.child.reporte_actas["actas_no_descargadas"].append(fileName)
@@ -591,6 +554,7 @@ class DownloadExpedientes(object):
                 result_log = "No se descargo acta. Error: {}".format(e)
                 self.write_logfile(fileName, result_log)
                 print(result_log)
+                # Pendientes_descargar
                 self.child.reporte_actas["actas_no_descargadas"].append(fileName)
             finally:
                 session.close()
@@ -607,13 +571,12 @@ class DownloadExpedientes(object):
         """
         year_1 = str(int(current_year) - 1)
         year_2 = str(int(current_year) - 2)
-        years = [current_year]  # , year_1, year_2]
+        years = [current_year]
         list_path = []
         for year in years:
             with HTMLSession() as session:
                 # Obtenemos la pagina de descargas de contratos y expedientes
                 response = session.get(URL_EXPEDIENTES)
-                # response = smartproxy(URL_EXPEDIENTES, session, sticky=False)
                 # Validamos la respuesta del servidor
                 if response.status_code == 200:
                     msgError = "Conexión existosa.!"
@@ -626,8 +589,7 @@ class DownloadExpedientes(object):
                     print(url_file)
                     if len(url_file) >= 1:
                         print("downloading,....")
-                        res = session.get(url_file[0])
-                        # res = smartproxy(url_file[0], session, sticky=False)
+                        res = session.get(url_file[0]) 
                         if res.status_code == 200:
                             result_log = (
                                 "Url expediente encontrado. Status code: {}.".format(
@@ -665,299 +627,6 @@ class DownloadExpedientes(object):
                     self.write_logfile(fileName, result_log)
         return list_path
 
-
-# --------------
-class MongoConnection(object):
-    def __init__(self, child, mongo_uri=None):
-        self.child = child
-        self.mongo_uri = mongo_uri
-        # Making a Connection with MongoClient
-        self.client = MongoClient(self.mongo_uri)
-
-    def start_connection(self, data_base, collection):
-        # database
-        self.db = self.client[data_base]
-        # collection
-        self.collection = self.db[collection]
-
-    def prepare_data(self):
-        self.child.data_frame_filtered.columns = [
-            remover_acentos(x) for x in list(self.child.data_frame_filtered.columns)
-        ]
-        self.child.data_frame_filtered = self.data_str(self.child.data_frame_filtered)
-
-    def write_logfile(self, fileName, result_log):
-        with open("../data/logs/logs.txt", "a") as file:
-            file.write(
-                "\n{0},{1},{2}".format(
-                    dt.now().strftime("%Y%m%d %H:%M:%S"), fileName, result_log
-                )
-            )
-
-    def data_str(self, df):
-        for x in list(df.columns):
-            if "Fecha de ultima modificacion" in str(x):
-                try:
-                    df.loc[:, x] = df.loc[:, x].apply(str)
-                    df.loc[:, x] = df.loc[:, x].apply(
-                        string_time, args=("%Y-%m-%d %H:%M:%S",)
-                    )
-                    df.loc[:, x] = df.loc[:, x].apply(
-                        lambda x: x.replace(
-                            microsecond=0,
-                        )
-                    )
-                except Exception as e:
-                    print(e)
-                    df.loc[:, x] = df.loc[:, x].apply(str)
-                    df.loc[:, x] = df.loc[:, x].apply(
-                        string_time, args=("%Y/%m/%d %H:%M",)
-                    )
-                    df.loc[:, x] = df.loc[:, x].apply(
-                        lambda x: x.replace(
-                            microsecond=0,
-                        )
-                    )
-                # else:
-                #    df.loc[:,x] = df.loc[:,x].apply(str)
-                #    df.loc[:,x] = df.loc[:,x].apply(string_time, args=('%Y-%m-%d %H:%M:%S.%f',))
-                #    df.loc[:,x] = df.loc[:,x].apply(lambda x: x.replace(microsecond=0,))
-            else:
-                df.loc[:, x] = df.loc[:, x].apply(str)
-        return df
-
-    def send_request_licitaciones(self):
-        # Creamos la query para preguntar si los archivos existen en mongo, en la base de datos de licitaciones
-        self.child.data_frame_filtered = self.data_str(self.child.data_frame_filtered)
-        # filtered = self.child.data_frame_filtered
-        # filtered.loc[:, "fecha_de_carga"] = dt.today().replace(microsecond=0)
-        # enviando la data a la base de datos de licitaciones_publicas
-        data_base = "compranet"
-        collection = "licitaciones_publicas"
-        self.start_connection(data_base, collection)
-
-        # self.send_data_mongo(self.create_query_bulk_mongo(filtered))
-        df_query = self.create_query_ids_mongo(self.child.data_frame_filtered)
-        print(
-            "Cantidad de actas a filtradas por cambios en los últimos {1} días: {0}".format(
-                len(self.child.data_frame_filtered), str(self.child.filter_n_day)
-            )
-        )
-        result_log = "Cantidad de actas a filtradas por cambios en los últimos {1} días: {0}".format(
-            len(self.child.data_frame_filtered), str(self.child.filter_n_day)
-        )
-        self.write_logfile("licitaciones", result_log)
-        # Hacer petición para preguntar que ids ya existen en mongo
-        df_query = self.find_docs(df_query)
-        # filtrar el resultado del query con el dataframe del chunk
-        self.child.new_licitaciones = self.filter_new_licitaciones(
-            self.child.data_frame_filtered, df_query
-        )
-        print(
-            "Cantidad de actas a nuevas para la base de datos licitaciones: {}".format(
-                len(self.child.new_licitaciones)
-            )
-        )
-        result_log = (
-            "Cantidad de actas a nuevas para la base de datos licitaciones: {}".format(
-                len(self.child.new_licitaciones)
-            )
-        )
-        self.write_logfile("licitaciones nuevas mongo", result_log)
-        self.child.reporte_actas["actas_nuevas_mongo_licitaciones_publicas"].append(
-            len(self.child.new_licitaciones)
-        )
-        # pregunto si las docs existen en la base de mongo
-        if len(self.child.new_licitaciones) == 0:
-            print("Sin actas nuevas en mongodb licitaciones_publicas")
-            self.child.data_frame_new_licitaciones_no_lite = pd.DataFrame([])
-        else:
-            print("Actas nuevas en mongodb licitaciones_publicas")
-            # creando query para insertar
-            news = self.child.new_licitaciones
-            news.loc[:, "fecha_de_carga"] = dt.today().replace(microsecond=0)
-            # enviando la data a la base de datos de licitaciones_publicas
-            # data_base = "compranet"
-            # collection = "licitaciones_publicas"
-            # self.start_connection(data_base, collection)
-            # self.send_data_mongo(self.create_query_bulk_mongo(news))
-            # Cuantos de estos archivos han sido transformados por literata
-            data_base = "compranet"
-            collection = "licitantes"
-            projections = ["expediente", "opportunity", "count"]
-            columns = {
-                "Codigo del expediente": "expediente",
-                "opportunityId": "opportunity",
-            }
-            query = self.create_query(self.child.new_licitaciones, columns)
-            # el problema es encontrar el filtro de los que no estan en literata
-            query_res = self.find_documents(query, projections, data_base, collection)
-            # TENGO QUE HACER UNA RESTA DE LOS NEW LICITANCIONES - QUERY, si quiery es cero entonces todos son nuevos
-            if len(query_res) == 0:
-                print(
-                    "Todos las licitaciones son nuevas en mongodb licitantes: ",
-                    len(self.child.new_licitaciones),
-                )
-                self.child.data_frame_new_licitaciones_no_lite = (
-                    self.child.new_licitaciones
-                )
-            else:
-                # aqui va la resta: new_licitantes - query_res
-                self.child.data_frame_new_licitaciones_no_lite = (
-                    self.filter_new_licitantes(self.child.new_licitaciones, query_res)
-                )
-                print(
-                    "Licitaciones nuevas en mongodb licitantes: ",
-                    len(self.child.data_frame_new_licitaciones_no_lite),
-                )
-            self.child.reporte_actas["actas_nuevas_mongo_licitantes"].append(
-                len(self.child.data_frame_new_licitaciones_no_lite)
-            )
-
-    def send_request_licitantes(self, fields, data_base, collection):
-        # Creamos la query para preguntar si los archivos filtrados y que ya existen en licitaciones_publicas existen en mongo, en la base de datos de licitantes
-        self.child.data_frame_filtered = self.data_str(self.child.data_frame_filtered)
-        # Creamos el query que se enviara a la base de datos de mongo de licitantes
-        query = self.create_query(self.child.data_frame_filtered, fields)
-        print("# data filtrada: {}".format(len(self.child.data_frame_filtered)))
-        # Hacer petición para preguntar que ids ya existen en mongo
-        projections = list(fields.values()) + ["count"]
-        df_query = self.find_documents(query, projections, data_base, collection)
-        # si df_query == 0 entonces todas las actas no se han procesado
-        # filtrar el resultado del query con el dataframe del chunk
-        self.child.new_licitantes = self.filter_new_licitantes(
-            self.child.data_frame_filtered, df_query
-        )
-        print("# nuevos licitantes: {}".format(len(self.child.new_licitantes)))
-        self.child.reporte_actas[
-            "actas_nuevas_mongo_licitantes_y_no_licitaciones_publicas"
-        ].append(len(self.child.new_licitantes))
-        # pregunto si las docs existen en la base de mongo de licitantes
-        if len(self.child.new_licitantes) == 0:
-            print("No hay actas de juntas por procesar")
-        else:
-            print("Nuevas actas por procesar")
-            # creando query para insertar
-            self.child.new_licitantes.loc[:, "fecha_de_carga"] = dt.today().replace(
-                microsecond=0
-            )
-            # actualizando la data a la base de datos de licitaciones_publicas
-            # data_base = "compranet"
-            # collection = "licitaciones_publicas"
-            # self.start_connection(data_base, collection)
-            # self.send_data_mongo(self.create_query_bulk_mongo(self.child.new_licitantes))
-
-    def send_data_mongo(self, chunk):
-        """Enviar los datos filtrados a la base de datos en un server mongo"""
-        self.upload_docs_to_mongo(chunk)
-
-    def create_query_ids_mongo(
-        self, df, columns=["Codigo del expediente", "opportunityId"]
-    ):
-        # creando query tipo json para mongo, aqui solo utilizo codigo y oportunity id
-        send = df.loc[:, columns].to_dict("list")
-        return {
-            "Codigo del expediente": {"$in": send["Codigo del expediente"]},
-            "opportunityId": {"$in": send["opportunityId"]},
-        }
-
-    def create_query(
-        self,
-        df,
-        columns={"Codigo del expediente": "expediente", "opportunityId": "opportunity"},
-    ):
-        # creando query tipo json para mongo, aqui solo utilizo codigo y oportunity id
-        cols = list(columns.keys())
-        send = df.loc[:, cols].to_dict("list")
-        return {y: {"$in": send[x]} for x, y in columns.items()}
-
-    def create_query_bulk_mongo(self, chunk):
-        return chunk.to_dict("records")
-
-    def docs_repeted(self, query):
-        if self.count_docs(query) == 0:
-            return True
-        else:
-            return False
-
-    def count_docs(self, query):
-        return len(query["opportunityId"]["$in"]) - self.collection.count_documents(
-            query
-        )
-
-    def find_docs(
-        self,
-        query,
-        projection_fields=[
-            "Codigo del expediente",
-            "opportunityId",
-            "Fecha de ultima modificacion",
-        ],
-    ):
-        query = self.collection.find(query, projection=projection_fields)
-        return pd.DataFrame(query)
-
-    def find_documents(self, query, projections, data_base, collection):
-        # mongo = MongoConnection(None, mongo_uri=self.mongo_uri)
-        self.start_connection(data_base, collection)
-        res = self.collection.find(query, projection=projections)
-        return pd.DataFrame(res)
-
-    def filter_new_licitaciones(self, df, query):
-        if len(query) > 0:
-            return df[
-                (df.opportunityId.isin(query.opportunityId) == False)
-                & (
-                    df["Codigo del expediente"].isin(query["Codigo del expediente"])
-                    == False
-                )
-                & (
-                    df["Fecha de ultima modificacion"]
-                    .apply(str)
-                    .isin(query["Fecha de ultima modificacion"].apply(str))
-                    == False
-                )
-            ]
-        else:
-            print("Todos los documentos son nuevos")
-            return df
-
-    def filter_new_licitantes(self, df, query):
-        if len(query) > 0:
-            query = query[query["count"] == "1"]
-            return df[
-                (df.opportunityId.isin(query["opportunity"]) == False)
-                & (df["Codigo del expediente"].isin(query["expediente"]) == False)
-            ]
-        elif len(query) == 0:
-            print("Todos los documentos son nuevos")
-            return df
-
-    def upload_docs_to_mongo(self, input_docs):
-        """Sube los documentos Mongo con un uuid formado con el opportunity id y el id del expediente de cada licitación.
-
-        Args:
-            input_docs ([list]): Lista de documentos (diccionarios typo JSON) para subir a Mongodb
-
-        Returns:
-            [Bolean]: Regresa True o False dependiendo si fue o No exitoso la subida de docs
-        """
-        docs = deepcopy(input_docs)
-        try:
-            col = self.collection
-            bulk_updates = []
-            for doc in docs:
-                doc["uuid"] = doc["Codigo del expediente"] + "_" + doc["opportunityId"]
-                filter_ = {"uuid": doc["uuid"]}
-                update_ = ReplaceOne(filter_, doc, upsert=True)
-                bulk_updates.append(update_)
-            bulk_result = col.bulk_write(bulk_updates)
-            return True
-        except Exception as e:
-            print(e)
-            return False
-
-
 # -------
 def string_time(string, formato="%Y-%m-%d %H:%M:%S.%f"):
     """Función para convertir un string en formato datetime
@@ -970,186 +639,6 @@ def string_time(string, formato="%Y-%m-%d %H:%M:%S.%f"):
         [Datetime]: Una variable tipo Datetime
     """
     return dt.strptime(string, formato).replace(microsecond=0)
-
-
-def entities_nombres(df, columns):
-    """Uso el api para limpiar los nombres que han sido obtenidos de la base de datos de licitantes en mongo
-
-    Args:
-        df (Pandas DataFrame): data frame de entrada
-        columns ([list]): lista de strings con los nombres de las columnas a procesar
-
-    Returns:
-        [Dataframe]: Regresa un data frame procesado
-    """
-    output = []
-    for index, row in df.loc[:, columns].iterrows():
-        if len(row["entities"]) > 0:
-            for x in row["entities"]:
-                fila = {str(x): row[x] for x in columns if x != "entities"}
-                fila["nombre_licitante"] = x["text"]
-                output.append(fila)
-                # output.append({'nombre_licitante':x['text'], 'id_licitantes' : id_, 'expediente':expediente, 'opportunity':opportunity})
-    return output
-
-
-def send_data_licitantes_contacto(fileName):
-    """Introduce una string con el expediente + el opporunity id de la licitación para hacer match de los nombres de licitantes correspondientes
-    a la licitación y la base de datos de centro de conocimiento pyme
-
-    Args:
-        fileName ([string]): Es un string que contenga, al menos, "opporunity id"_"número de expediente"_+...
-        La separación de cada elemento tiene que ser un "_"
-    """
-    mdb = MongoConnection(None, read_mongo("../auth/uri_robina.txt"))
-    opportunity = fileName.split("_")[0]
-    expediente = fileName.split("_")[1]
-    collection = "licitantes"
-    data_base = "compranet"
-    projections = [
-        "filename",
-        "entities",
-        "uuid",
-        "expediente",
-        "opportunity",
-        "year",
-        "month",
-        "count",
-        "fecha_carga",
-    ]
-    if "." in fileName:
-        file_name = fileName.split(".")[0]
-    query = {"uuid": file_name, "opportunity": opportunity, "expediente": expediente}
-    mdb.start_connection(data_base, collection)
-    df_licitantes = mdb.find_docs(query, projections)
-    # ----Obteniendo fecha de actualizacion de licitaciones
-    opportunity = fileName.split("_")[0]
-    expediente = fileName.split("_")[1]
-    collection = "licitaciones_publicas"
-    data_base = "compranet"
-    projections = [
-        "Codigo del expediente",
-        "opportunityId",
-        "Fecha de ultima modificacion",
-    ]
-    query = {"opportunityId": opportunity, "Codigo del expediente": expediente}
-    mdb.start_connection(data_base, collection)
-    df_licitaciones = mdb.find_docs(query, projections)
-    print("df_licitaciones: ", list(df_licitaciones.columns))
-    print("df_licitantes: ", list(df_licitantes.columns))
-    df_licitantes = df_licitantes.merge(
-        df_licitaciones,
-        how="inner",
-        left_on=["opportunity", "expediente"],
-        right_on=["opportunityId", "Codigo del expediente"],
-        suffixes=("_licitantes", "_licitaciones_publicas"),
-    )
-    df_licitantes = df_licitantes.drop(
-        columns=["Codigo del expediente", "opportunityId"]
-    )
-    # ---- Limpiando datos de licitantes
-    dflicitantes = pd.DataFrame(
-        entities_nombres(
-            df_licitantes,
-            [
-                "entities",
-                "_id_licitantes",
-                "expediente",
-                "opportunity",
-                "Fecha de ultima modificacion",
-                "_id_licitaciones_publicas",
-                "count",
-            ],
-        )
-    )
-    print(list(dflicitantes.columns))
-    dflicitantes["nombre_licitante"] = (
-        dflicitantes["nombre_licitante"].apply(str).str.upper()
-    )
-    dflicitantes["nombre_licitante"] = dflicitantes["nombre_licitante"].apply(
-        cleaning_by_line_v3, args=("nombres",)
-    )
-    dflicitantes["nombre_licitante"] = dflicitantes["nombre_licitante"].apply(
-        delete_sa_cv
-    )
-    dflicitantes = dflicitantes.drop_duplicates()
-    # ----- Obteniendo datos de CCP
-    data_base = "datalake"
-    collection = "ccp_new_summarized"
-    projections = [
-        "Nombre Establecimiento DENUE",
-        "Razon Social DENUE",
-        "Establecimientos DENUE",
-        "HOOVERS",
-        "Telefono DENUE",
-        "Pagina web DENUE",
-        "Correo Electronico DENUE",
-    ]
-    ls_output = []
-    for (
-        id_licitantes,
-        expediente,
-        opportunity,
-        Fecha_de_ultima_modificacion,
-        _id_licitaciones_publicas,
-        count,
-        name_,
-    ) in dflicitantes.values:
-        # Esta query solo toma la info del primer dict de Establecimiento, en el raro caso de tener más, falta esos casos raros
-        query = {
-            "$or": [
-                {
-                    "Establecimientos DENUE.0.raz_social": {
-                        "$regex": name_,
-                        "$options": "i",
-                    }
-                },
-                {
-                    "Establecimientos DENUE.0.nom_estab": {
-                        "$regex": name_,
-                        "$options": "i",
-                    }
-                },
-                {"Nombre Establecimiento DENUE": {"$regex": name_, "$options": "i"}},
-                {"Razon Social DENUE": {"$regex": name_, "$options": "i"}},
-                {"HOOVERS.0.Company Name": {"$regex": name_, "$options": "i"}},
-            ]
-        }
-        # Con esto obtenemos un dataframe con la info de de las condiconales or de arriba
-        outp_mul = ask_mongo_ccp(data_base, collection, projections, query=query)
-        if len(outp_mul) > 0:
-            if type(outp_mul.to_dict(orient="records")) == list:
-                x = outp_mul.to_dict(orient="records")
-            else:
-                x = [outp_mul.to_dict(orient="records")]
-            m = {
-                "expediente": expediente,
-                "opportunity": opportunity,
-                "Fecha_de_ultima_modificacion": string_time(
-                    Fecha_de_ultima_modificacion, formato="%Y-%m-%d %H:%M:%S"
-                ),
-                "id_licitantes": id_licitantes,
-                "_id_licitaciones_publicas": _id_licitaciones_publicas,
-                "informacion_contacto": x,
-            }
-            y = {"nombre_licitante": name_, "licitaciones": m}
-            if len(y.values()) > 0:
-                ls_output.append(y)
-    # --- Agregando datos a la base de datos licitantes_contacto
-    collection = "licitantes_contacto"
-    data_base = "compranet"
-    mdb.start_connection(collection=collection, data_base=data_base)
-    return upload_docs_to_mongo_info_licitantes(ls_output)
-
-
-# ---------
-# --> obtengo todos los nombres de datalake en ccp
-def ask_mongo_ccp(data_base, collection, projections, query={}):
-    """Obtengo la lista de entidades obtenidas que están en la base de datos de licitantes"""
-    mdb = MongoConnection(None, read_mongo("../auth/uri_robina.txt"))
-    mdb.start_connection(data_base, collection)
-    return mdb.find_docs(query, projections)
-
 
 def delete_sa_cv(ent):
     """Función para limpiar los nombres de empresas, se elimina la denominación social.
@@ -1175,7 +664,6 @@ def delete_sa_cv(ent):
         " C[\. ]*V[ \.]*",
         " R[\. ]*L[ \.]*",
         " C[ \.]*S[ \.]*",
-        #' S[ \.]*A[ \.]*',
         " S[ \.]*A[ \.]*P[ \.]*I[ \.]*",
         " S[ \.]*A[ \.]*A[\.]*",
         " S[ \.]*A[ \.]*C[\.]*",
