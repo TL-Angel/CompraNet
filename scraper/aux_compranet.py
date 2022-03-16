@@ -14,9 +14,8 @@ from glob import glob
 ########################################
 # CONFIG
 BUCKET = "uniclick-dl-robina-compranet"
-folder_bucket = "Actas_Junta_Aclaraciones/"
 LOCAL_FOLDER = "../data/tmp/data/"
-BLOB_FOLDER = "Acta_Junta_Aclaraciones"
+BLOB_FOLDER = "Acta_Presentacion_Y_Proposiciones"
 TIMEOUT = 90
 CHUNKSIZE = 2097152 # 1024 * 1024 B * 2 = 2 MB
 ########################################
@@ -68,6 +67,37 @@ def busqueda_archivo_dl(BUCKET, FULL_NAME):
     else:
         print("no subido ", blobs)
         return False
+
+def move_blob(bucket_name, blob_name, destination_bucket_name, destination_blob_name):
+    """Moves a blob from one bucket to another with a new name."""
+    # The ID of your GCS bucket
+    # bucket_name = "your-bucket-name"
+    # The ID of your GCS object
+    # blob_name = "your-object-name"
+    # The ID of the bucket to move the object to
+    # destination_bucket_name = "destination-bucket-name"
+    # The ID of your new GCS object (optional)
+    # destination_blob_name = "destination-object-name"
+
+    storage_client = storage.Client()
+    set_google_key("../auth/uniclick-dl-robina-prod-compranet.json")
+    source_bucket = storage_client.bucket(bucket_name)
+    source_blob = source_bucket.blob(blob_name)
+    destination_bucket = storage_client.bucket(destination_bucket_name)
+
+    blob_copy = source_bucket.copy_blob(
+        source_blob, destination_bucket, destination_blob_name
+    )
+    source_bucket.delete_blob(blob_name)
+
+    print(
+        "Blob {} in bucket {} moved to blob {} in bucket {}.".format(
+            source_blob.name,
+            source_bucket.name,
+            blob_copy.name,
+            destination_bucket.name,
+        )
+    )
 
 def get_extra_data(oppId, extra_data):
     diccionario_salida = {}
@@ -358,6 +388,18 @@ def filtrar_uploaded_downloaded(df, query):
             == False
         )
     ]
+def update_cambios_dl(new_blob_name, old_blob_name):
+    """Método para actualizar los cambios de la URLDL en la base de datos
+    """
+    fecha_mod_reg = str(dt.today().replace(microsecond=0))
+    query_update ="""UPDATE [DWH_ANALYTICS].[dbo].[Licitacion]
+    SET UrlActaDL = '{0}', FechaModificacionReg = CAST('{1}' as DATETIME)
+    WHERE UrlActaDL LIKE '{2}'
+    """.format(new_blob_name, fecha_mod_reg, old_blob_name)
+    sql = Conection("DWH")
+    print(query_update)
+    query = sql.updateQuery(query_update)
+    print(query)
 
 def update_data_from_db(data):
     """Método para actualizar los datos de las licitacions que ya se tenian previamente en DB,
@@ -426,7 +468,6 @@ def update_data_from_db(data):
         SET {1}, FechaModificacionReg = CAST('{3}' as DATETIME)
         WHERE {2}""".format(table, sets, condicion, fecha_mod_reg)
         sql = Conection("DWH")
-        print(query_update)
         query = sql.updateQuery(query_update)
     return query
 
@@ -436,8 +477,3 @@ def insertar_datos_nuevos(data, FieldList=[]):
     sql = Conection('DWH')
     sql.InsertData(data, TableName='Licitacion',FieldList=FieldList )
 
-
-if __name__ == "__main__":
-    upload_txt_to_dl("hola", "prueba")
-    DL = Datalake(BUCKET)
-    DL.download_to_file(folder_bucket, "../data/tmp/prueba.txt")

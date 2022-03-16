@@ -22,7 +22,7 @@ def app(n_days=1):
     today = dt.today() - timedelta(days=0, hours=6, minutes=0)
     today = today.replace(hour=0, minute=0, second=0, microsecond=0)
     current_year = str(today.year)
-    month = str(today.month)
+    month = str(today.month).zfill(2)
     expedientes = DownloadExpedientes(None)
     expedientes.tmp_data = TMP_EXPEDIENTES
     list_expedientes = expedientes.get_expedientes_publicados(

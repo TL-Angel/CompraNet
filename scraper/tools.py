@@ -26,6 +26,7 @@ XPATH_ACTA_PROPOSICIONES = (
 )
 XPATH_ACTA_ACLARACIONES = '//tr[.//td[contains(text(),"Acta(s)")]]//a/@onclick'
 TIPO_ACTA = "proposiciones"
+BLOB_FOLDER = "Acta_Presentacion_Y_Proposiciones"
 MAPEO_DF_DWH = {
     "Codigo del expediente": "Codigo",
     "Numero del procedimiento": "NumProc",
@@ -247,7 +248,7 @@ class DownloadExpedientes(object):
         self.url_expedientes = url_expedientes
         self.path_datalake_folder = path_datalake_folder
         self.tmp_data = TMP_ACTAS
-        self.blob_name = "Actas_Junta_Aclaraciones"
+        self.blob_name = BLOB_FOLDER
 
     def download_data_expediente_publicados(self, year, month):
         """Método para gestionar la descarga de la lista de expedientes de la junta de actas
@@ -261,7 +262,7 @@ class DownloadExpedientes(object):
             str: Nombre del archivo descargado
         """
         self.year = year
-        self.month = month
+        self.month = str(month).zfill(2)
         salida = []
         try:
             if (len(self.child.uploaded_no_downloaded) == 0) & (
@@ -375,7 +376,7 @@ class DownloadExpedientes(object):
                         str(self.tmp_data),
                         str(file_name),
                         str(self.year),
-                        str(self.month),
+                        str(self.month).zfill(2),
                     )
                     print("Archivo subido a data lake?? ", response)
                     if response:
@@ -386,7 +387,7 @@ class DownloadExpedientes(object):
                         )
                         # Actualizar UrlActaDL, NombreArchivoActa si el acta fue subida al DL
                         blob_name = (
-                            f"{self.blob_name}/{ self.year}/{self.month}/{file_name}"
+                            f"{self.blob_name}/{ self.year}/{str(self.month).zfill(2)}/{file_name}"
                         )
                         nombre_acta = str(file_name_noext)
                         res = update_actas_subidas_dl(
@@ -401,7 +402,7 @@ class DownloadExpedientes(object):
                         result_log = "Respuesta dl: {}".format(response)
                         self.write_logfile(file_name, result_log)
                         blob_name = (
-                            f"{self.blob_name}/{ self.year}/{self.month}/{file_name}"
+                            f"{self.blob_name}/{ self.year}/{str(self.month).zfill(2)}/{file_name}"
                         )
                         full_name = r"{0}/{1}".format(self.tmp_data, file_name)
                         self.write_logfile(
@@ -483,7 +484,7 @@ class DownloadExpedientes(object):
         Returns:
             object: Respuesta de la descarga de cada archivo.
         """
-        yearmonth = self.year + self.month
+        yearmonth = self.year + str(self.month).zfill(2)
         fileName = "{0}_{1}_{2}_{3}".format(TIPO_ACTA, oppId, expId, yearmonth)
         with HTMLSession() as session:
             url_base = "https://compranet.hacienda.gob.mx"

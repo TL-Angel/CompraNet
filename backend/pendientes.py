@@ -8,9 +8,8 @@ import time
 # CONFIG
 ##############################
 BUCKET = "uniclick-dl-robina-compranet"
-folder_bucket = "Actas_Junta_Aclaraciones/"
 LOCAL_FOLDER = "../data/tmp/data"
-BLOB_FOLDER = "Acta_Junta_Aclaraciones"
+BLOB_FOLDER = "Acta_Presentacion_Y_Proposiciones"
 ##############################
 
 
@@ -62,7 +61,7 @@ def descargas_pendientes():
     today = dt.today() - timedelta(days=0, hours=6, minutes=0)
     today = today.replace(hour=0, minute=0, second=0, microsecond=0)
     current_year = str(today.year)
-    month = str(today.month)    
+    month = str(today.month).zfill(2)  
     fields = ['Codigo', 'OpportunityId']
     sql = Conection('DWH')
     data = sql.buscarDescargasPendientes(fields)
