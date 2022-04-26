@@ -236,7 +236,7 @@ class DownloadExpedientes(object):
 
     def __init__(
         self,
-        child,
+        child=None,
         url_expedientes="https://www.gob.mx/compranet/documentos/datos-abiertos-250375",
         year=None,
         month=None,
@@ -247,10 +247,10 @@ class DownloadExpedientes(object):
         self.month = month
         self.url_expedientes = url_expedientes
         self.path_datalake_folder = path_datalake_folder
-        self.tmp_data = TMP_ACTAS
+        self.tmp_data = TMP_EXPEDIENTES if child == None else TMP_ACTAS
         self.blob_name = BLOB_FOLDER
 
-    def download_data_expediente_publicados(self, year, month):
+    def download_data_expediente_publicados(self):
         """Método para gestionar la descarga de la lista de expedientes de la junta de actas
         de aclaraciones (excel).
 
@@ -261,8 +261,8 @@ class DownloadExpedientes(object):
         Returns:
             str: Nombre del archivo descargado
         """
-        self.year = year
-        self.month = str(month).zfill(2)
+        #self.year = year
+        #self.month = str(month).zfill(2)
         salida = []
         try:
             if (len(self.child.uploaded_no_downloaded) == 0) & (
@@ -559,7 +559,7 @@ class DownloadExpedientes(object):
             finally:
                 session.close()
 
-    def get_expedientes_publicados(self, URL_EXPEDIENTES, current_year):
+    def get_expedientes_publicados(self):
         """Método para gestionar la descarga de la lista de expedientes de la junta de actas.
 
         Args:
@@ -569,6 +569,8 @@ class DownloadExpedientes(object):
         Returns:
             list: Lista con los nombres de los archivos descargados.
         """
+        URL_EXPEDIENTES = self.url_expedientes 
+        current_year = self.year
         year_1 = str(int(current_year) - 1)
         year_2 = str(int(current_year) - 2)
         years = [current_year]

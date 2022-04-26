@@ -186,8 +186,8 @@ def write_txt(fileName, content):
             )
 
 def proxy():
-    user = "robiproxies"
-    pwd = "Un1click"
+    user = "scraapis"
+    pwd = "Scr4ap1s"
     port_rnd = str(random.randint(1, 9999)).zfill(4)
     proxy = f"http://{user}:{pwd}@gate.dc.smartproxy.com:2{port_rnd}"
     return {"http": proxy, "https": proxy}
