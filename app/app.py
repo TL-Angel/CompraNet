@@ -89,6 +89,7 @@ def app(n_days=1):
             #---------------------------
             # Mandar new licitaciones a DB Licitaciones
             # ---------------------------
+            print("---> 1")
             insertar_datos_nuevos(
                 expedientes_anuales.new_licitaciones,
                 FieldList=expedientes_anuales.new_licitaciones.columns.tolist(),
@@ -114,10 +115,12 @@ if __name__ == "__main__":
     try:
         print(sys.argv)
         n_days = int(sys.argv[1])
-        try:
-            app(n_days)
-        except Exception as e:
-            print(e)
+        for i in range(INTENTOS):
+            try:
+                app(n_days)
+                break
+            except Exception as e:
+                print(e)
 
     except KeyboardInterrupt as e:
         print("Interrupted")
