@@ -115,12 +115,10 @@ if __name__ == "__main__":
     try:
         print(sys.argv)
         n_days = int(sys.argv[1])
-        for i in range(INTENTOS):
-            try:
-                app(n_days)
-                break
-            except Exception as e:
-                print(e)
+        try:
+            app(n_days)
+        except Exception as e:
+            print(e)
 
     except KeyboardInterrupt as e:
         print("Interrupted")
