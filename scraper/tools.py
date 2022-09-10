@@ -93,7 +93,12 @@ class ExpedientesPublicados(object):
         self.data_frame_filtered = self.mapping_names_dwh(
             self.data_frame_filtered, MAPEO_DF_DWH
         )
-        self.data_frame_filtered['DescAnuncio'] = self.data_frame_filtered['DescAnuncio'].apply(str).apply(lambda x: x.replace("'", ""))
+        self.data_frame_filtered['DescAnuncio'] = self.data_frame_filtered[
+            'DescAnuncio'].apply(str).apply(
+                lambda x: x.replace('[\"]+', "", regex=True))
+        self.data_frame_filtered['TituloExpediente'] = \
+            self.data_frame_filtered['TituloExpediente'].apply(str).apply(
+                lambda x: x.replace('[\"]+', "", regex=True))
         self.data_frame_filtered["ActaPublicada"] = 0
         self.data_frame_filtered["UrlActaDL"] = ""
         self.data_frame_filtered["NombreArchivoActa"] = ""

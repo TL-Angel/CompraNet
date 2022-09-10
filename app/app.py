@@ -59,40 +59,54 @@ def app(n_days=1):
                 expedientes_anuales.data_frame_filtered
             )
 
-            # Las de abajo deben de ser las licitaciones filtradas - 
+            # Las de abajo deben de ser las licitaciones filtradas
             # las licitaciones de la db
             (
                 expedientes_anuales.new_licitaciones,
                 expedientes_anuales.uploaded_db_licitaciones,
-            ) = filter_new_licitaciones(expedientes_anuales.data_frame_filtered)
+            ) = filter_new_licitaciones(
+                expedientes_anuales.data_frame_filtered)
 
 
-            expedientes_anuales.uploaded_no_downloaded = filtrar_uploaded_no_downloaded(
-                expedientes_anuales.uploaded_db_licitaciones
-            )
+            expedientes_anuales.uploaded_no_downloaded = \
+                filtrar_uploaded_no_downloaded(
+                    expedientes_anuales.uploaded_db_licitaciones
+                )
             
-            expedientes_anuales.uploaded_downloaded = filtrar_uploaded_downloaded(
-                expedientes_anuales.uploaded_db_licitaciones,
-                expedientes_anuales.uploaded_no_downloaded,
-            )
+            expedientes_anuales.uploaded_downloaded = \
+                filtrar_uploaded_downloaded(
+                    expedientes_anuales.uploaded_db_licitaciones,
+                    expedientes_anuales.uploaded_no_downloaded,
+                )
             
-            print("DF filtradas:  ", len(expedientes_anuales.data_frame_filtered))
-            print("New licitaciones:  ", len(expedientes_anuales.new_licitaciones))
-            print("uploaded db:  ", len(expedientes_anuales.uploaded_db_licitaciones))
-            actas['actas_uploaded_db'] = str(len(expedientes_anuales.uploaded_db_licitaciones))
             print(
-                "Uploaded no downloaded: ", len(expedientes_anuales.uploaded_no_downloaded)
+                "DF filtradas:  ",
+                len(expedientes_anuales.data_frame_filtered))
+            print(
+                "New licitaciones:  ",
+                len(expedientes_anuales.new_licitaciones))
+            print(
+                "uploaded db:  ",
+                len(expedientes_anuales.uploaded_db_licitaciones))
+            actas['actas_uploaded_db'] = \
+                str(len(expedientes_anuales.uploaded_db_licitaciones))
+            print(
+                "Uploaded no downloaded: ",
+                len(expedientes_anuales.uploaded_no_downloaded)
             )
-            actas["actas_uploaded_no_downloaded"] = str(len(expedientes_anuales.uploaded_no_downloaded))
-            print("Uploaded yes downloaded: ", len(expedientes_anuales.uploaded_downloaded))
-            actas["actas_uploaded_yes_downloaded"] = str(len(expedientes_anuales.uploaded_downloaded))
+            actas["actas_uploaded_no_downloaded"] = \
+                str(len(expedientes_anuales.uploaded_no_downloaded))
+            print(
+                "Uploaded yes downloaded: ",
+                len(expedientes_anuales.uploaded_downloaded))
+            actas["actas_uploaded_yes_downloaded"] = \
+                str(len(expedientes_anuales.uploaded_downloaded))
             #---------------------------
             # Mandar new licitaciones a DB Licitaciones
             # ---------------------------
-            print("---> 1")
             insertar_datos_nuevos(
                 expedientes_anuales.new_licitaciones,
-                FieldList=expedientes_anuales.new_licitaciones.columns.tolist(),
+                FieldList=expedientes_anuales.new_licitaciones.columns.tolist()
             )
             # --------------------------
             # Actualizar archivos existentes en db con nuevos cambios
@@ -100,7 +114,10 @@ def app(n_days=1):
             update_data_from_db(expedientes_anuales.uploaded_no_downloaded)
             
             # ---- Descargar actas -----------
-            downloaded = DownloadExpedientes(child=expedientes_anuales, year=current_year, month=month)            
+            downloaded = DownloadExpedientes(
+                child=expedientes_anuales,
+                year=current_year,
+                month=month)            
             downloaded.download_data_expediente_publicados()
             reporte_actas[
                 excel.replace(TMP_EXPEDIENTES, "")
